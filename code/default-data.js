@@ -6,7 +6,7 @@ const DEFAULT_GAME_DATA = {
                      "timerDuration":  5,
                      "categories":  null,
                      "pixabayKey": "",
-                     "wordsPerGame":  3,
+                     "wordsPerGame":  10,
                      "buttonsCount":  4,
                      "buttonsRows":  null,
                      "hintEnabled":  true,
