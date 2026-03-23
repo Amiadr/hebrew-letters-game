@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "letters-game",
+      "runtimeExecutable": "C:/Program Files/Git/usr/bin/perl.exe",
+      "runtimeArgs": ["-MHTTP::Daemon", "-MHTTP::Status", "-e",
+        "my $d=HTTP::Daemon->new(LocalPort=>8766,ReuseAddr=>1) or die $!; while(my $c=$d->accept){while(my $r=$c->get_request){my $p='C:/Users/AR/Cloud-Drive/Letters'.$r->url->path; $p=~s{/$}{/index.html}; if(-f $p){$c->send_file_response($p)}else{$c->send_error(404)}} $c->close}"],
+      "port": 8766
+    }
+  ]
+}

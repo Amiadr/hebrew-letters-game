@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>מדריך להורה ומורה — משחק האותיות</title>
+<link rel="stylesheet" href="fonts/noto-sans-hebrew.css">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Noto Sans Hebrew', Arial, sans-serif;
+  background: #F5F7FA;
+  color: #333;
+  line-height: 1.7;
+  font-size: 1rem;
+}
+
+/* ── NAV ── */
+nav {
+  position: sticky;
+  top: 0;
+  background: #1565C0;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 24px;
+  height: 56px;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,.2);
+}
+nav .logo { font-size: 1.5rem; font-weight: 900; letter-spacing: 4px; margin-left: 12px; }
+nav .nav-title { font-size: 1.05rem; font-weight: 700; }
+nav a.back-btn {
+  margin-right: auto;
+  color: white;
+  text-decoration: none;
+  font-size: .9rem;
+  background: rgba(255,255,255,.18);
+  padding: 5px 14px;
+  border-radius: 20px;
+  transition: background .2s;
+}
+nav a.back-btn:hover { background: rgba(255,255,255,.3); }
+
+/* ── LAYOUT ── */
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 36px 20px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── TOC ── */
+.toc {
+  background: white;
+  border-radius: 16px;
+  padding: 24px 28px;
+  margin-bottom: 36px;
+  box-shadow: 0 2px 12px rgba(0,0,0,.07);
+  border-right: 5px solid #1565C0;
+}
+.toc h2 { font-size: 1.1rem; color: #1565C0; margin-bottom: 14px; }
+.toc ol { padding-right: 20px; }
+.toc li { margin-bottom: 6px; }
+.toc a { color: #1565C0; text-decoration: none; font-weight: 600; }
+.toc a:hover { text-decoration: underline; }
+
+/* ── SECTION ── */
+.section {
+  background: white;
+  border-radius: 16px;
+  padding: 32px 34px;
+  margin-bottom: 28px;
+  box-shadow: 0 2px 12px rgba(0,0,0,.07);
+  scroll-margin-top: 70px;
+}
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 22px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #E8F0FE;
+}
+.section-icon { font-size: 2rem; }
+.section-title { font-size: 1.45rem; font-weight: 900; color: #1565C0; }
+
+h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #333;
+  margin: 22px 0 10px;
+}
+h3:first-child { margin-top: 0; }
+p { margin-bottom: 12px; color: #444; }
+ul, ol { padding-right: 22px; margin-bottom: 14px; }
+li { margin-bottom: 6px; color: #444; }
+strong { color: #222; }
+
+/* ── SCREENSHOTS ── */
+.screenshot-wrap {
+  margin: 20px 0;
+  text-align: center;
+}
+.screenshot-wrap img {
+  max-width: 100%;
+  border-radius: 14px;
+  box-shadow: 0 4px 20px rgba(0,0,0,.15);
+  border: 1px solid #E0E0E0;
+}
+.screenshot-wrap figcaption {
+  font-size: .85rem;
+  color: #888;
+  margin-top: 8px;
+}
+
+/* ── TWO SCREENSHOTS SIDE BY SIDE ── */
+.screenshots-row {
+  display: flex;
+  gap: 16px;
+  margin: 20px 0;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.screenshots-row figure {
+  flex: 1;
+  min-width: 220px;
+  max-width: 380px;
+  text-align: center;
+}
+.screenshots-row img {
+  width: 100%;
+  border-radius: 14px;
+  box-shadow: 0 4px 20px rgba(0,0,0,.15);
+  border: 1px solid #E0E0E0;
+}
+.screenshots-row figcaption {
+  font-size: .82rem;
+  color: #888;
+  margin-top: 7px;
+}
+
+/* ── TIP / NOTE BOX ── */
+.tip {
+  background: #E3F2FD;
+  border-right: 4px solid #1976D2;
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin: 16px 0;
+  font-size: .95rem;
+  color: #0D47A1;
+}
+.tip strong { color: #0D47A1; }
+
+.note {
+  background: #FFF8E1;
+  border-right: 4px solid #F9A825;
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin: 16px 0;
+  font-size: .95rem;
+  color: #5D4037;
+}
+
+/* ── SETTING ROW ── */
+.setting {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 14px 0;
+  border-bottom: 1px solid #F0F0F0;
+}
+.setting:last-child { border-bottom: none; }
+.setting-icon { font-size: 1.4rem; flex-shrink: 0; margin-top: 2px; }
+.setting-body { flex: 1; }
+.setting-name { font-weight: 700; color: #222; margin-bottom: 3px; }
+.setting-desc { font-size: .92rem; color: #555; margin: 0; line-height: 1.5; }
+
+/* ── STEP LIST ── */
+.steps { list-style: none; padding: 0; counter-reset: step; }
+.steps li {
+  counter-increment: step;
+  position: relative;
+  padding-right: 40px;
+  margin-bottom: 14px;
+}
+.steps li::before {
+  content: counter(step);
+  background: #1565C0;
+  color: white;
+  font-weight: 900;
+  font-size: .85rem;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  right: 0;
+  top: 2px;
+}
+
+/* ── FOOTER ── */
+footer {
+  text-align: center;
+  color: #AAA;
+  font-size: .85rem;
+  margin-top: 20px;
+  padding-bottom: 20px;
+}
+footer a { color: #1565C0; }
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="logo">א ב ג</span>
+  <span class="nav-title">מדריך להורה ומורה</span>
+  <a href="index.html" class="back-btn">← חזרה למשחק</a>
+</nav>
+
+<div class="container">
+
+  <!-- TOC -->
+  <div class="toc">
+    <h2>📋 תוכן עניינים</h2>
+    <ol>
+      <li><a href="#overview">סקירה כללית — מה המשחק עושה?</a></li>
+      <li><a href="#how-to-play">כיצד משחקים?</a></li>
+      <li><a href="#end-report">דוח סיום — הורה/מורה</a></li>
+      <li><a href="#player-name">שם השחקן</a></li>
+      <li><a href="#word-levels">הגייה מפורשת ואות שקטה — רמת המילים</a></li>
+      <li><a href="#admin-words">ניהול מילים — הוספה, עריכה, מחיקה</a></li>
+      <li><a href="#admin-images">חיפוש תמונות</a></li>
+      <li><a href="#admin-categories">קטגוריות</a></li>
+      <li><a href="#settings">הגדרות</a></li>
+      <li><a href="#export-import">ייצוא ויבוא</a></li>
+    </ol>
+  </div>
+
+  <!-- 1. OVERVIEW -->
+  <section class="section" id="overview">
+    <div class="section-header">
+      <span class="section-icon">🎯</span>
+      <h2 class="section-title">סקירה כללית — מה המשחק עושה?</h2>
+    </div>
+
+    <p>
+      <strong>משחק האותיות</strong> הוא משחק לימודי לילדים בגיל 4–6, המתרגל זיהוי אותיות עבריות וקשר בין אות לצליל שלה בתוך המילה — מיומנויות יסוד לקראת הקריאה.
+      המשחק מציג לילד תמונה של מילה מוכרת ומבקש ממנו לבחור את האותיות הנכונות כדי לאיית אותה — אות אחת בכל פעם.
+    </p>
+
+    <div class="screenshot-wrap">
+      <img src="screenshots/3 - מסך המשחק.jpg" alt="מסך המשחק"/>
+      <figcaption>מסך משחק לדוגמה — המילה "חתול" עם 4 כפתורי אותיות לבחירה</figcaption>
+    </div>
+
+    <h3>עקרונות פדגוגיים</h3>
+    <ul>
+      <li><strong>אותיות לא מבלבלות</strong> — הכפתורים כוללים רק אותיות שאינן דומות לאות המבוקשת (למשל: ו ו-ן לעולם לא יופיעו באותה שאלה).</li>
+      <li><strong>כל מילה בתורה</strong> — המשחק עובר על כל המילים לפי סדר רנדומלי, ולא חוזר על מילה עד שכולן שוחקו.</li>
+      <li><strong>רמז הדרגתי</strong> — לאחר מספר שגיאות שניתן להגדיר, הכפתור הנכון מתחיל "לדחוף" בצורה חזותית.</li>
+      <li><strong>חיזוק חיובי</strong> — לאחר כל מילה מוצלחת מופיעה הודעת כבוד עם תמונה וצלצול.</li>
+      <li><strong>הערכה מעצבת</strong> — בסוף כל סשן מוצג דוח המפרט את מספר השגיאות בכל מילה ואילו מילים דולגו. ההורה/מורה יכול להתאים את התרגול בהתאם.</li>
+    </ul>
+  </section>
+
+  <!-- 2. HOW TO PLAY -->
+  <section class="section" id="how-to-play">
+    <div class="section-header">
+      <span class="section-icon">🕹️</span>
+      <h2 class="section-title">כיצד משחקים?</h2>
+    </div>
+
+    <div class="screenshots-row">
+      <figure>
+        <img src="screenshots/1 - מסך פתיחה.jpg" alt="מסך פתיחה"/>
+        <figcaption>מסך הפתיחה</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/4 - לחיצה נכונה על אות.jpg" alt="לחיצה נכונה"/>
+        <figcaption>לאחר לחיצה נכונה — האות עולה לחריץ</figcaption>
+      </figure>
+    </div>
+
+    <ol class="steps">
+      <li>לוחצים על <strong>"התחל משחק"</strong> במסך הפתיחה.</li>
+      <li>מוצגת <strong>תמונה</strong> של המילה ומתחתיה <strong>חריצים ריקים</strong> — אחד לכל אות.</li>
+      <li>הילד לוחץ על <strong>האות הנכונה</strong> (מימין לשמאל). לאחר לחיצה נכונה, האות עולה לחריץ ועוברים לאות הבאה.</li>
+      <li>לחיצה שגויה — הכפתור מושבת.</li>
+      <li>לאחר השלמת המילה — מופיע פופאפ <strong>"כל הכבוד!"</strong> עם תמונה וצלצול, ועוברים למילה הבאה.</li>
+    </ol>
+
+    <div class="screenshot-wrap">
+      <img src="screenshots/5 - פופאפ הצלחה.jpg" alt="פופאפ הצלחה"/>
+      <figcaption>פופאפ ההצלחה לאחר השלמת מילה</figcaption>
+    </div>
+
+    <h3>כפתור "דלג"</h3>
+    <p>
+      בפינה השמאלית העליונה יש כפתור <strong>⏪ דלג</strong>.
+      לחיצה עליו מעבירה את המילה לסוף הסשן — הילד יקבל אותה שוב מאוחר יותר.
+      ניתן לדלג על כל מילה <strong>פעם אחת בלבד</strong> בכל סשן.
+    </p>
+
+    <h3>רמז חזותי</h3>
+    <p>
+      אם הופעלה אפשרות הרמז (בהגדרות), לאחר מספר שגיאות מוגדר הכפתור הנכון
+      יתחיל <strong>לפעום בצהוב</strong> כדי לכוון את הילד.
+    </p>
+  </section>
+
+  <!-- 3. END REPORT -->
+  <section class="section" id="end-report">
+    <div class="section-header">
+      <span class="section-icon">📊</span>
+      <h2 class="section-title">דוח סיום — הורה/מורה</h2>
+    </div>
+
+    <p>
+      בתום כל סשן מוצג מסך הסיום עם כפתור <strong>"📊 דוח הורה/מורה"</strong>.
+      לחיצה עליו פותחת דוח מפורט על הסשן שהסתיים.
+    </p>
+
+    <div class="screenshot-wrap">
+      <img src="screenshots/8 - דוח סיום.jpg" alt="דוח סיום"/>
+      <figcaption>דוח הסיום — פירוט לפי מילה</figcaption>
+    </div>
+
+    <p>הדוח מציג לכל מילה:</p>
+    <ul>
+      <li><strong>מספר שגיאות</strong> — כמה פעמים הילד בחר אות שגויה.</li>
+      <li><strong>דולגו</strong> — האם הילד לחץ על "דלג" במילה זו.</li>
+    </ul>
+
+    <div class="tip">
+      <strong>💡 שימוש מעשי:</strong> מילים עם שגיאות רבות יכולות להצביע על אות שקשה לילד — כדאי לתרגל אותה בנפרד.<br>מילים שדולגו עשויות להיות לא מוכרות לילד — שווה לבדוק אם התמונה ברורה, או להסיר את המילה מהמשחק בינתיים.
+    </div>
+  </section>
+
+  <!-- 4. PLAYER NAME -->
+  <section class="section" id="player-name">
+    <div class="section-header">
+      <span class="section-icon">👤</span>
+      <h2 class="section-title">שם השחקן</h2>
+    </div>
+
+    <div class="screenshot-wrap">
+      <img src="screenshots/2 - מסך פתיחה עם שם.jpg" alt="מסך פתיחה עם שם"/>
+      <figcaption>מסך פתיחה עם שדה שם השחקן</figcaption>
+    </div>
+
+    <p>
+      כאשר אפשרות זו מופעלת (בהגדרות), מסך הפתיחה יציג שדה הזנת שם.
+      המשחק יפנה לילד <strong>בשמו האישי</strong> — למשל "כל הכבוד, יובל!" — בכל פופאפ הצלחה ובמסך הסיום.
+    </p>
+
+    <div class="tip">
+      <strong>💡 טיפ:</strong> אם כמה ילדים משתמשים באותו מחשב, כל אחד יכול להחליף את שמו במסך הפתיחה לפני תחילת המשחק. השם נשמר אוטומטית.
+    </div>
+
+    <p>
+      <strong>להפעלה/כיבוי:</strong> ניהול ← הגדרות ← סעיף "התאמה אישית" ← 👤 שם השחקן.
+      שם ריק שקול לכיבוי האפשרות.
+    </p>
+  </section>
+
+  <!-- WORD LEVELS -->
+  <section class="section" id="word-levels">
+    <div class="section-header">
+      <span class="section-icon">🔤</span>
+      <h2 class="section-title">הגייה מפורשת ואות שקטה — רמת המילים</h2>
+    </div>
+
+    <p>
+      המשחק מחלק את המילים לשתי קבוצות, לפי מידת הקושי הפונטי עבור ילדים בגיל גן:
+    </p>
+
+    <div class="setting-row" style="margin-bottom:12px;">
+      <div>
+        <strong>הגייה מפורשת</strong>
+        <div style="font-size:.9rem; color:#666; margin-top:3px;">כל אות במילה נהגית במפורש — הילד יכול לצלצל כל אות ולקבל את המילה הנכונה.</div>
+        <div style="font-size:.85rem; color:#888; margin-top:4px;">דוגמאות: כלב, ילד, שמש, דג, פרח, יד</div>
+      </div>
+    </div>
+
+    <div class="setting-row" style="margin-bottom:20px;">
+      <div>
+        <strong>אות שקטה</strong>
+        <div style="font-size:.9rem; color:#666; margin-top:3px;">המילה כוללת אות שאינה נהגית במפורש — הילד צריך לדעת מראש שהיא שם.</div>
+        <div style="font-size:.85rem; color:#888; margin-top:4px;">דוגמאות: ראש (א שקטה), כוס (ו כתנועה), פיל (י כתנועה), תות (ו כתנועה)</div>
+      </div>
+    </div>
+
+    <div class="note">
+      <strong>📌 המלצה פדגוגית:</strong> לילדי גן חובה שרק מתחילים ללמוד אותיות — מומלץ להתחיל עם <strong>הגייה מפורשת בלבד</strong>.
+      מילים עם אות שקטה מתאימות לילדים שכבר מכירים את האלפבית ומוכנים לאתגר גדול יותר.
+    </div>
+
+    <h3 style="margin-top:24px; margin-bottom:12px; font-size:1.05rem; color:#1565C0;">איך משנים את הרמה?</h3>
+
+    <div class="screenshot-wrap">
+      <img src="screenshots/9 - סינון מילים.jpg" alt="חלון סינון מילים"/>
+      <figcaption>לחיצה על שורת הסינון במסך הפתיחה פותחת חלון בחירת רמת המילים</figcaption>
+    </div>
+
+    <p>
+      במסך הפתיחה מופיעה שורה קטנה מתחת לשם השחקן המציגה את הרמה הנוכחית — למשל <strong>"הגייה מפורשת בלבד"</strong>.
+      לחיצה על השורה פותחת חלון קטן שבו ניתן להפעיל או לכבות את הכללת מילים עם אות שקטה.
+    </p>
+
+    <p>
+      ניתן גם לשנות דרך: <strong>ניהול ← הגדרות ← 📝 מילים במשחק ← מילים עם אות שקטה</strong>.
+    </p>
+
+    <h3 style="margin-top:24px; margin-bottom:12px; font-size:1.05rem; color:#1565C0;">סיווג מילה בעת עריכה</h3>
+
+    <p>
+      בעת הוספת מילה חדשה או עריכת מילה קיימת, ניתן לסמן את התיבה <strong>"המילה כוללת אות שקטה"</strong>
+      המופיעה מיד מתחת לשדה המילה. מילים שלא סומנו נחשבות להגייה מפורשת כברירת מחדל.
+    </p>
+
+    <div class="tip">
+      <strong>💡 טיפ:</strong> אם אתם לא בטוחים — שאלו את עצמכם: אם נסיר את האות ונשים במקומה ניקוד, האם המילה תישמע אותו הדבר?
+      אם כן — זו אות שקטה. למשל: "פיל" בלי י׳ עם חיריק תחת הפ׳ נשמעת בדיוק כמו "פיל" — אז הי׳ היא אות שקטה.
+    </div>
+  </section>
+
+  <!-- 4. MANAGE WORDS -->
+  <section class="section" id="admin-words">
+    <div class="section-header">
+      <span class="section-icon">📝</span>
+      <h2 class="section-title">ניהול מילים — הוספה, עריכה, מחיקה</h2>
+    </div>
+
+    <p>
+      לחיצה על <strong>"⚙️ ניהול"</strong> במסך הפתיחה פותחת את פאנל הניהול.
+      בלשונית <strong>"מילים"</strong> מוצגת רשת כל המילים הקיימות עם תמונה, שם וקטגוריה.
+    </p>
+
+    <div class="screenshot-wrap">
+      <img src="screenshots/6 - ניהול מילים.jpg" alt="פאנל ניהול מילים"/>
+      <figcaption>פאנל ניהול המילים — רשימת כל המילים</figcaption>
+    </div>
+
+    <h3>הוספת מילה חדשה</h3>
+    <ol class="steps">
+      <li>לחצו על הכפתור הירוק <strong>"+ הוסף מילה"</strong>.</li>
+      <li>הקלידו את המילה בעברית בשדה המתאים.</li>
+      <li>סמנו את התיבה <strong>"המילה כוללת אות שקטה"</strong> אם המילה כוללת אות שאינה נהגית במפורש — למשל: ראש, כוס, פיל. לפרטים ראו סעיף <a href="#word-levels">הגייה מפורשת ואות שקטה</a>.</li>
+      <li>בחרו <strong>קטגוריה</strong> מהרשימה הנפתחת.</li>
+      <li>הוסיפו תמונה — חיפוש מהאינטרנט (ראו סעיף הבא) או העלאה מהמחשב.</li>
+      <li>לחצו <strong>"שמור"</strong>.</li>
+    </ol>
+
+    <div class="screenshot-wrap">
+      <img src="screenshots/6א - טופס הוספת מילה.jpg" alt="טופס הוספת מילה"/>
+      <figcaption>טופס הוספת מילה — שימו לב ל-checkbox "המילה כוללת אות שקטה"</figcaption>
+    </div>
+
+    <h3>עריכת מילה קיימת</h3>
+    <p>לחצו על כפתור <strong>✏️ עריכה</strong> בכרטיס המילה. ניתן לשנות כל שדה ולשמור.</p>
+
+    <h3>מחיקת מילה</h3>
+    <p>לחצו על כפתור <strong>🗑️ המחיקה האדום</strong> בכרטיס המילה. המחיקה מיידית ולא ניתנת לביטול.</p>
+
+    <div class="note">
+      <strong>⚠️ שימו לב:</strong> מילים ללא תמונה לא ישתתפו במשחק. מומלץ לוודא שכל מילה כוללת תמונה ברורה ומתאימה.
+    </div>
+  </section>
+
+  <!-- 5. IMAGE SEARCH -->
+  <section class="section" id="admin-images">
+    <div class="section-header">
+      <span class="section-icon">🖼️</span>
+      <h2 class="section-title">חיפוש תמונות</h2>
+    </div>
+
+    <p>
+      בחלון הוספה/עריכה של מילה יש סעיף <strong>"🔍 חפש תמונה מהאינטרנט"</strong>.
+      ניתן לחפש תמונות מקורות שני:
+    </p>
+
+    <div class="setting">
+      <span class="setting-icon">🌐</span>
+      <div class="setting-body">
+        <div class="setting-name">Wikimedia Commons</div>
+        <p class="setting-desc">
+          פעיל תמיד, ללא הרשמה. מחפש תמונות ב-Wikipedia ו-Wikimedia Commons — רישיון פתוח, איכות גבוהה.
+          עדיף לחפש <strong>באנגלית</strong> לתוצאות טובות יותר (לדוגמה: <em>"dog"</em> במקום <em>"כלב"</em>).
+        </p>
+      </div>
+    </div>
+
+    <div class="setting">
+      <span class="setting-icon">🎨</span>
+      <div class="setting-body">
+        <div class="setting-name">Pixabay</div>
+        <p class="setting-desc">
+          תמונות איכותיות ומאוירות — מצוינות לילדים! דורש מפתח API חינמי.
+          ראו הגדרות → Pixabay להגדרת המפתח.
+        </p>
+      </div>
+    </div>
+
+    <ol class="steps">
+      <li>הקלידו מילת חיפוש (עדיף באנגלית) ולחצו <strong>"חפש"</strong> או <strong>Enter</strong>.</li>
+      <li>עיינו בתוצאות — לחצו על תמונה מועדפת לבחירה.</li>
+      <li>אם אין תוצאות מתאימות, לחצו <strong>"טען עוד"</strong> לתוצאות נוספות.</li>
+      <li>לחלופין, העלו תמונה מהמחשב באמצעות כפתור <strong>"בחר קובץ"</strong>.</li>
+    </ol>
+
+    <div class="tip">
+      <strong>💡 טיפ:</strong> התמונות נשמרות <strong>מקומית</strong> בדפדפן כדי שהמשחק יעבוד ללא חיבור לאינטרנט. בעת ייצוא הנתונים התמונות מצורפות אוטומטית.
+    </div>
+  </section>
+
+  <!-- 6. CATEGORIES -->
+  <section class="section" id="admin-categories">
+    <div class="section-header">
+      <span class="section-icon">🏷️</span>
+      <h2 class="section-title">קטגוריות</h2>
+    </div>
+
+    <p>
+      כל מילה שייכת לקטגוריה. הקטגוריה מוצגת בתגית קטנה מעל התמונה במהלך המשחק
+      ועוזרת לילד להתמצא בהקשר המילה.
+    </p>
+
+    <h3>קטגוריות מובנות</h3>
+    <p>המשחק מגיע עם קטגוריות בסיסיות כגון: בעלי חיים 🐾, אוכל 🍎, גוף 🤚, טבע 🌿, צבעים 🎨 ועוד.</p>
+
+    <h3>הוספת קטגוריה מותאמת אישית</h3>
+    <ol class="steps">
+      <li>בחלון הוספה/עריכה של מילה, פתחו את תפריט הקטגוריות.</li>
+      <li>גללו לתחתית הרשימה — יש שדה <strong>"+ קטגוריה חדשה"</strong>.</li>
+      <li>הקלידו שם קטגוריה ובחרו לה אייקון (אמוג'י) מגלריית הבחירה.</li>
+      <li>ניתן גם להקליד אמוג'י ידנית בשדה הטקסט שמעל הגלריה.</li>
+    </ol>
+
+    <div class="tip">
+      <strong>💡 רעיון:</strong> ניתן ליצור קטגוריות בנושאים שלמדתם לאחרונה — למשל "חגים", "גן החיות", "הבית שלנו" — כדי לחבר את המשחק לחיי היומיום של הילד.
+    </div>
+  </section>
+
+  <!-- 7. SETTINGS -->
+  <section class="section" id="settings">
+    <div class="section-header">
+      <span class="section-icon">⚙️</span>
+      <h2 class="section-title">הגדרות</h2>
+    </div>
+
+    <p>
+      לחיצה על לשונית <strong>"⚙️ הגדרות"</strong> בפאנל הניהול פותחת את כל אפשרויות ההתאמה.
+    </p>
+
+    <div class="screenshot-wrap">
+      <img src="screenshots/7 - הגדרות.jpg" alt="הגדרות"/>
+      <figcaption>מסך ההגדרות</figcaption>
+    </div>
+
+    <h3>📚 מספר מילים במשחק</h3>
+    <div class="setting">
+      <span class="setting-icon">🔢</span>
+      <div class="setting-body">
+        <div class="setting-name">כמה מילים בכל סשן?</div>
+        <p class="setting-desc">
+          ברירת מחדל: <strong>20 מילים</strong>. ניתן לבחור 10 / 15 / 20 / 25 או להגדיר מספר מותאם.
+          מומלץ להתחיל עם 10–15 לילדים צעירים יותר.
+        </p>
+      </div>
+    </div>
+
+    <h3>🎮 הגדרות כפתורי האותיות</h3>
+
+    <div class="setting">
+      <span class="setting-icon">🔵</span>
+      <div class="setting-body">
+        <div class="setting-name">מספר כפתורי אותיות לבחירה</div>
+        <p class="setting-desc">
+          2 עד 6 כפתורים. <strong>פחות כפתורים = קל יותר.</strong>
+          מומלץ להתחיל עם 2–3 ולהגדיל בהדרגה.
+        </p>
+      </div>
+    </div>
+
+    <div class="setting">
+      <span class="setting-icon">↕️</span>
+      <div class="setting-body">
+        <div class="setting-name">מספר שורות</div>
+        <p class="setting-desc">
+          1 או 2 שורות. עם 5–6 כפתורים מומלץ 2 שורות כדי שהכפתורים לא יהיו קטנים מדי.
+        </p>
+      </div>
+    </div>
+
+    <div class="setting">
+      <span class="setting-icon">💡</span>
+      <div class="setting-body">
+        <div class="setting-name">רמז לאחר שגיאות חוזרות</div>
+        <p class="setting-desc">
+          כאשר מופעל, לאחר מספר שגיאות שתגדירו (1–5) הכפתור הנכון יתחיל <strong>לפעום בצהוב</strong>.
+          ניתן לכבות לחלוטין אם הילד מתקדם טוב.
+        </p>
+      </div>
+    </div>
+
+    <h3>🎮 התאמה אישית</h3>
+
+    <div class="setting">
+      <span class="setting-icon">👤</span>
+      <div class="setting-body">
+        <div class="setting-name">שם השחקן</div>
+        <p class="setting-desc">כאשר מופעל, מוצג שדה שם במסך הפתיחה, והמשחק מפנה לילד בשמו האישי.</p>
+      </div>
+    </div>
+
+    <div class="setting">
+      <span class="setting-icon">✨</span>
+      <div class="setting-body">
+        <div class="setting-name">אנימציית אות עפה לחריץ</div>
+        <p class="setting-desc">לאחר לחיצה נכונה, האות "עפה" מהכפתור אל החריץ. ניתן לכבות אם גורם לסחרחורת.</p>
+      </div>
+    </div>
+
+    <h3>⏱️ טיימר מעבר בין מילים</h3>
+    <div class="setting">
+      <span class="setting-icon">⏱️</span>
+      <div class="setting-body">
+        <div class="setting-name">זמן המתנה לפני מילה הבאה (1–10 שניות)</div>
+        <p class="setting-desc">
+          ברירת מחדל: <strong>5 שניות</strong>. זהו הזמן שבו פופאפ ההצלחה נשאר על המסך.
+          ניתן ללחוץ על "המילה הבאה" גם לפני תום הזמן.
+        </p>
+      </div>
+    </div>
+
+    <h3>🖼️ Pixabay — תמונות איכותיות לילדים</h3>
+    <div class="setting">
+      <span class="setting-icon">🔑</span>
+      <div class="setting-body">
+        <div class="setting-name">מפתח API של Pixabay (חינמי)</div>
+        <p class="setting-desc">
+          הרשמה חינמית בכתובת <strong>pixabay.com</strong> → My Account → API Key.
+          לאחר הזנת המפתח, חיפוש התמונות יכלול גם תמונות איכותיות ומאוירות מ-Pixabay.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8. EXPORT / IMPORT -->
+  <section class="section" id="export-import">
+    <div class="section-header">
+      <span class="section-icon">💾</span>
+      <h2 class="section-title">ייצוא ויבוא</h2>
+    </div>
+
+    <p>
+      הלחצנים <strong>"📤 ייצוא"</strong> ו-<strong>"📥 יבוא"</strong> מאפשרים גיבוי ושיתוף של כל המילים, הקטגוריות, התמונות וההגדרות.
+    </p>
+
+    <h3>מתי כדאי לייצא?</h3>
+    <ul>
+      <li>לפני שדרוג Windows או פרמוט המחשב.</li>
+      <li>כדי לשתף את מאגר המילים שבניתם עם מורה/הורה אחר.</li>
+      <li>להעביר את המשחק למחשב אחר.</li>
+    </ul>
+
+    <h3>מה נכלל בקובץ הייצוא?</h3>
+    <ul>
+      <li>כל המילים עם מטא-דאטה (שם, קטגוריה, תאריך).</li>
+      <li>כל התמונות (מקודדות בתוך הקובץ — לא צריך קבצים חיצוניים).</li>
+      <li>כל ההגדרות כולל מפתח Pixabay.</li>
+    </ul>
+
+    <div class="tip">
+      <strong>💡 טיפ:</strong> הקובץ המיוצא הוא JSON רגיל — ניתן לשמור אותו בכל מקום ולייבא בכל עת. קובץ הגיבוי עשוי להיות גדול (מעל MB 1) בשל התמונות המוטמעות.
+    </div>
+
+    <div class="note">
+      <strong>⚠️ שימו לב:</strong> יבוא מחליף את <em>כל</em> הנתונים הקיימים. לפני יבוא מומלץ לייצא קודם כגיבוי.
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <p>משחק האותיות · <a href="index.html">חזרה למשחק</a></p>
+  <p style="font-size:0.78rem; color:#aaa; margin-top:6px; direction:ltr;">
+    © 2026 עמיעד רוזנברג &nbsp;·&nbsp;
+    <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank"
+       rel="license noopener" style="color:#aaa;">CC BY-NC 4.0</a>
+  </p>
+</footer>
+
+</body>
+</html>
