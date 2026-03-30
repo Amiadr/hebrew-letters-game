@@ -359,6 +359,7 @@ body {
 .btn-add { background: #43A047; color: white; }
 .btn-export { background: #1976D2; color: white; }
 .btn-import { background: #FB8C00; color: white; }
+.btn-merge  { background: #6A1B9A; color: white; }
 
 #admin-word-list {
     width: 100%; padding: 14px;
@@ -745,7 +746,9 @@ body {
             <button class="admin-toolbar-btn btn-add" onclick="openAddWord()">➕ הוסף מילה</button>
             <button class="admin-toolbar-btn btn-export" onclick="exportData()">📤 ייצוא</button>
             <button class="admin-toolbar-btn btn-import" onclick="triggerImport()">📥 יבוא</button>
+            <button class="admin-toolbar-btn btn-merge"  onclick="triggerMerge()">🔀 מיזוג</button>
             <input type="file" id="import-file-input" accept=".json" style="display:none" onchange="handleImport(event)"/>
+            <input type="file" id="merge-file-input"  accept=".json" style="display:none" onchange="handleMerge(event)"/>
         </div>
         <div id="admin-word-list"></div>
     </div>
@@ -883,16 +886,35 @@ body {
             </div>
 
             <div class="settings-section">
-                <h3>🖼️ Pixabay – תמונות איכותיות לילדים</h3>
-                <p style="color:#666; margin-bottom:10px; font-size:.9rem;">
-                    Pixabay מספק תמונות איכותיות מאוד עם חיפוש בטוח לילדים.
-                    הרישום חינמי ב-<strong>pixabay.com</strong> → My Account → API Key.
+                <h3>🖼️ מקורות תמונות (API)</h3>
+                <p style="color:#666; margin-bottom:12px; font-size:.9rem;">
+                    הגדר מפתחות API לקבלת תמונות איכותיות. ניתן להגדיר אחד או יותר — כולם יופעלו יחד.
+                    ללא מפתחות, תמונות נטענות מ-Wikimedia Commons.
                 </p>
+
+                <p style="font-weight:600; margin-bottom:6px;">Pixabay</p>
+                <p style="color:#888; font-size:.85rem; margin-bottom:6px;">הרישום חינמי ב-pixabay.com → My Account → API Key</p>
                 <div class="pixabay-row">
-                    <input type="text" id="pixabay-key-input" placeholder="הדבק כאן את מפתח ה-API..." dir="ltr"/>
+                    <input type="text" id="pixabay-key-input" placeholder="מפתח API..." dir="ltr"/>
                     <button class="btn-save-key" onclick="savePixabayKey()">שמור</button>
                 </div>
-                <p id="pixabay-status" style="margin-top:8px; font-size:.9rem; color:#888;">⚪ Wikimedia Commons (ברירת מחדל)</p>
+                <p id="pixabay-status" style="margin-top:6px; font-size:.85rem; color:#888;">⚪ לא מוגדר</p>
+
+                <p style="font-weight:600; margin-top:14px; margin-bottom:6px;">Unsplash</p>
+                <p style="color:#888; font-size:.85rem; margin-bottom:6px;">הרישום חינמי ב-unsplash.com/developers → New Application</p>
+                <div class="pixabay-row">
+                    <input type="text" id="unsplash-key-input" placeholder="Access Key..." dir="ltr"/>
+                    <button class="btn-save-key" onclick="saveUnsplashKey()">שמור</button>
+                </div>
+                <p id="unsplash-status" style="margin-top:6px; font-size:.85rem; color:#888;">⚪ לא מוגדר</p>
+
+                <p style="font-weight:600; margin-top:14px; margin-bottom:6px;">Pexels</p>
+                <p style="color:#888; font-size:.85rem; margin-bottom:6px;">הרישום חינמי ב-pexels.com/api → Your API Key</p>
+                <div class="pixabay-row">
+                    <input type="text" id="pexels-key-input" placeholder="API Key..." dir="ltr"/>
+                    <button class="btn-save-key" onclick="savePexelsKey()">שמור</button>
+                </div>
+                <p id="pexels-status" style="margin-top:6px; font-size:.85rem; color:#888;">⚪ לא מוגדר</p>
             </div>
 
             <div class="settings-section">
@@ -904,6 +926,7 @@ body {
                 <div style="display:flex; gap:10px; flex-wrap:wrap;">
                     <button class="admin-toolbar-btn btn-export" onclick="exportData()">📤 ייצוא הכל</button>
                     <button class="admin-toolbar-btn btn-import" onclick="triggerImport()">📥 יבוא</button>
+                    <button class="admin-toolbar-btn btn-merge"  onclick="triggerMerge()">🔀 מיזוג</button>
                 </div>
             </div>
         </div>
@@ -946,7 +969,7 @@ body {
             <!-- Preview area (separate from upload, shown when an image is selected) -->
             <div id="img-preview-wrap" style="display:none; margin-bottom:10px; position:relative; text-align:center; background:#F5F5F5; border-radius:12px; padding:10px;">
                 <img id="img-preview" style="max-height:160px; max-width:100%; object-fit:contain; border-radius:8px;"/>
-                <button type="button" onclick="clearImagePreview()" title="הסר תמונה"
+                <button type="button" onclick="clearImagePreview(true)" title="הסר תמונה"
                         style="position:absolute;top:6px;left:6px;background:rgba(0,0,0,.55);color:white;border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;">✕</button>
             </div>
             <!-- Upload area (click to browse files) -->
@@ -968,8 +991,9 @@ body {
                        onkeydown="if(event.key==='Enter') triggerImageSearch()"/>
                 <button class="btn-search-img" onclick="triggerImageSearch()">חפש</button>
             </div>
+            <p id="img-attribution-line" style="display:none; font-size:.75rem; color:#888; margin:4px 0 0; text-align:center;"></p>
             <div id="img-search-results"></div>
-            <p class="search-attribution" id="search-source-note">Wikimedia Commons / Pixabay – רשיון פתוח</p>
+            <p class="search-attribution" id="search-source-note">Wikimedia Commons / Pixabay / Unsplash / Pexels – רשיון פתוח</p>
         </div>
 
         <div class="modal-actions">
@@ -1055,14 +1079,68 @@ body {
 
 <script>
 (async () => {
+    const REFRESH_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+    const lastLoad = parseInt(localStorage.getItem('lastPageLoad') || '0', 10);
+    if (Date.now() - lastLoad > REFRESH_INTERVAL_MS) {
+        localStorage.setItem('lastPageLoad', String(Date.now()));
+        location.reload(true);
+        return;
+    }
+
     await initDB();
     await initializeDefaultWords();
+    await migrateCustomFields();
     await syncDefaultWords();
     await migrateSilentLetterField();
     await initStartScreen();
 })();
 </script>
 
+
+<!-- ===== EXPORT API KEYS MODAL ===== -->
+<div id="export-keys-modal" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width:400px; text-align:center;">
+        <h3>ייצוא מפתחות API</h3>
+        <p id="export-keys-msg" style="color:#555; margin-bottom:22px; font-size:.95rem;"></p>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <button id="export-keys-default-btn" class="btn-save" style="background:#1565C0;" onclick="resolveExportKeysModal(false)">ייצא בלי מפתחות</button>
+            <button class="btn-cancel-modal" style="background:#F5F5F5; color:#333;" onclick="resolveExportKeysModal(true)">ייצא עם מפתחות</button>
+            <button class="btn-cancel-modal" onclick="resolveExportKeysModal(null)">ביטול</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===== IMPORT API KEYS MODAL ===== -->
+<div id="import-keys-modal" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width:440px;">
+        <h3>ייבוא מפתחות API</h3>
+        <p style="color:#555; font-size:.9rem; margin-bottom:12px;">
+            המילים וההגדרות ייובאו בכל מקרה. השאלה הבאה נוגעת אך ורק למפתחות ה-API שנמצאו בקובץ.
+        </p>
+        <p id="import-keys-info" style="background:#F5F5F5; border-radius:10px; padding:10px 14px; font-size:.88rem; color:#444; margin-bottom:18px; line-height:1.8;"></p>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <button id="import-keys-default-btn" class="btn-save" style="background:#1565C0;" onclick="resolveImportKeysModal('new')">ייבא מפתחות חדשים והשאיר מפתחות קיימים</button>
+            <button class="btn-cancel-modal" style="background:#F5F5F5; color:#333;" onclick="resolveImportKeysModal('none')">ייבא מידע בלבד ללא מפתחות כלל</button>
+            <button class="btn-cancel-modal" style="background:#F5F5F5; color:#333;" onclick="resolveImportKeysModal('all')">ייבא הכל ודרוס מפתחות קיימים</button>
+            <button class="btn-cancel-modal" onclick="resolveImportKeysModal(null)">ביטול</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===== MERGE CONFLICTS MODAL ===== -->
+<div id="merge-conflicts-modal" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width:460px;">
+        <h3>🔀 מיזוג נתונים</h3>
+        <p id="merge-summary" style="color:#2E7D32; font-weight:600; margin-bottom:10px;"></p>
+        <p id="merge-conflict-list" style="background:#FFF3E0; border-radius:10px; padding:10px 14px; font-size:.88rem; color:#E65100; margin-bottom:14px; line-height:1.8;"></p>
+        <p style="color:#555; font-size:.9rem; margin-bottom:16px;">מה לעשות עם המילים הקיימות?</p>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <button id="merge-keep-btn" class="btn-save" style="background:#1565C0;" onclick="resolveMergeConflictsModal('keep')">שמור על המילים הקיימות אצלי</button>
+            <button class="btn-cancel-modal" style="background:#F5F5F5; color:#333;" onclick="resolveMergeConflictsModal('overwrite')">החלף את המילים הקיימות אצלי עם המילים בקובץ שהעלתי</button>
+            <button class="btn-cancel-modal" onclick="resolveMergeConflictsModal(null)">ביטול</button>
+        </div>
+    </div>
+</div>
 
 </body>
 </html>

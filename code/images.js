@@ -119,7 +119,9 @@ function searchPixabayImages(apiKey, query, limit, page = 1) {
             cleanup();
             resolve((data.hits || []).map(h => ({
                 url: h.webformatURL,
-                title: h.tags || ''
+                title: h.tags || '',
+                source: 'pixabay',
+                attribution: ''
             })));
         };
         function cleanup() {
@@ -137,27 +139,84 @@ function searchPixabayImages(apiKey, query, limit, page = 1) {
     });
 }
 
+// Search Unsplash (requires API key, uses fetch + CORS)
+async function searchUnsplashImages(apiKey, query, limit, page = 1) {
+    try {
+        const res = await fetch(
+            'https://api.unsplash.com/search/photos?query=' + encodeURIComponent(query) +
+            '&per_page=' + limit + '&page=' + page,
+            { headers: { Authorization: 'Client-ID ' + apiKey } }
+        );
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.results || []).map(p => ({
+            url: p.urls.small,
+            title: p.alt_description || p.description || '',
+            source: 'unsplash',
+            attribution: 'Photo by ' + p.user.name + ' on Unsplash'
+        }));
+    } catch (e) { return []; }
+}
+
+// Search Pexels (requires API key, uses fetch + CORS)
+async function searchPexelsImages(apiKey, query, limit, page = 1) {
+    try {
+        const res = await fetch(
+            'https://api.pexels.com/v1/search?query=' + encodeURIComponent(query) +
+            '&per_page=' + limit + '&page=' + page,
+            { headers: { Authorization: apiKey } }
+        );
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.photos || []).map(p => ({
+            url: p.src.medium,
+            title: p.alt || '',
+            source: 'pexels',
+            attribution: 'Photo by ' + p.photographer + ' on Pexels'
+        }));
+    } catch (e) { return []; }
+}
+
+// Interleave results from multiple sources (round-robin)
+function interleaveResults(arrays) {
+    const result = [];
+    const maxLen = Math.max(...arrays.map(a => a.length));
+    for (let i = 0; i < maxLen; i++)
+        for (const arr of arrays)
+            if (i < arr.length) result.push(arr[i]);
+    return result;
+}
+
 // Main search function used by admin panel (page starts at 1)
 async function searchImages(query, limit = 20, page = 1) {
     if (!query) return [];
 
-    // Pixabay — best quality, safesearch for children; use if API key is set
-    const pixabayKey = await getSetting('pixabayKey');
-    if (pixabayKey && pixabayKey.trim()) {
-        const results = await searchPixabayImages(pixabayKey.trim(), query, limit, page);
-        if (results.length > 0) return results;
+    const pixabayKey  = (await getSetting('pixabayKey'))  || '';
+    const unsplashKey = (await getSetting('unsplashKey')) || '';
+    const pexelsKey   = (await getSetting('pexelsKey'))   || '';
+
+    const hasApiKey = pixabayKey.trim() || unsplashKey.trim() || pexelsKey.trim();
+    if (hasApiKey) {
+        const promises = [];
+        if (pixabayKey.trim())  promises.push(searchPixabayImages(pixabayKey.trim(),  query, limit, page));
+        if (unsplashKey.trim()) promises.push(searchUnsplashImages(unsplashKey.trim(), query, limit, page));
+        if (pexelsKey.trim())   promises.push(searchPexelsImages(pexelsKey.trim(),   query, limit, page));
+        const allResults = await Promise.all(promises);
+        const combined = interleaveResults(allResults);
+        if (combined.length > 0) return combined.slice(0, limit);
     }
 
     // Page 1 — Wikipedia article images are the most relevant (editorially curated)
     if (page === 1) {
         const wikiResults = await searchWikiArticleImages(query, limit);
-        if (wikiResults.length >= 3) return wikiResults;
-        // Too few article images → fall through to Commons
+        if (wikiResults.length >= 3)
+            return wikiResults.map(r => ({ ...r, source: 'wikipedia', attribution: '' }));
     }
 
     // Load-more pages / sparse article → Wikimedia Commons file search
     const offset = (page - 1) * limit;
-    return searchCommonsImages(query, limit, offset);
+    const commonsResults = await searchCommonsImages(query, limit, offset);
+    return commonsResults.map(r => ({ ...r, source: 'commons', attribution: '' }));
 }
 
 // SVG placeholder (used while Wikipedia image loads, or as fallback)
@@ -189,31 +248,73 @@ async function initializeDefaultWords() {
     const existing = await getAllWords();
     if (existing.length > 0) return;
 
-    if (typeof DEFAULT_GAME_DATA !== 'undefined' && DEFAULT_GAME_DATA?.words?.length > 0) {
-        await importAllData(DEFAULT_GAME_DATA);
+    if (typeof DEFAULT_GAME_DATA === 'undefined' || !DEFAULT_GAME_DATA?.words?.length) return;
+
+    // Import words & images only — do NOT overwrite user settings (API keys etc.)
+    for (const entry of DEFAULT_GAME_DATA.words) {
+        const { imageDataURL, ...wordMeta } = entry;
+        await saveWord(wordMeta);
+        if (imageDataURL) await saveImage({ id: wordMeta.id, dataURL: imageDataURL });
     }
+    // Import only non-sensitive default settings (not API keys)
+    const s = DEFAULT_GAME_DATA.settings || {};
+    if (s.timerDuration        != null) await setSetting('timerDuration',        s.timerDuration);
+    if (s.wordsPerGame         != null) await setSetting('wordsPerGame',         s.wordsPerGame);
+    if (s.buttonsCount         != null) await setSetting('buttonsCount',         s.buttonsCount);
+    if (s.hintEnabled          != null) await setSetting('hintEnabled',          s.hintEnabled);
+    if (s.hintAfterErrors      != null) await setSetting('hintAfterErrors',      s.hintAfterErrors);
+    if (s.playerNameEnabled    != null) await setSetting('playerNameEnabled',    s.playerNameEnabled);
+    if (s.letterAnimationEnabled != null) await setSetting('letterAnimationEnabled', s.letterAnimationEnabled);
+    if (s.showSilentLetterWords  != null) await setSetting('showSilentLetterWords',  s.showSilentLetterWords);
 }
 
 async function syncDefaultWords() {
     if (typeof DEFAULT_GAME_DATA === 'undefined' || !DEFAULT_GAME_DATA?.words?.length) return;
 
-    const existing        = await getAllWords();
-    const existingIds     = new Set(existing.map(w => w.id));
-    const existingTexts   = new Set(existing.map(w => w.word));
-    const deletedIds      = new Set((await getSetting('deletedDefaultIds')) || []);
+    const existing      = await getAllWords();
+    const existingMap   = new Map(existing.map(w => [w.id, w]));
+    const existingTexts = new Set(existing.map(w => w.word));
+    const deletedIds    = new Set((await getSetting('deletedDefaultIds')) || []);
 
-    let added = 0;
+    let added = 0, updated = 0;
     for (const entry of DEFAULT_GAME_DATA.words) {
-        if (!entry.id?.startsWith('def_')) continue;   // only default words
-        if (existingIds.has(entry.id))     continue;   // already present
-        if (deletedIds.has(entry.id))      continue;   // user deleted it
-        if (existingTexts.has(entry.word)) continue;   // user has same text under different id
+        if (!entry.id?.startsWith('def_')) continue;
 
-        const { imageDataURL, ...wordMeta } = entry;
-        await saveWord(wordMeta);
-        if (imageDataURL) await saveImage({ id: wordMeta.id, dataURL: imageDataURL });
-        added++;
+        const existingWord = existingMap.get(entry.id);
+
+        if (!existingWord) {
+            // New word — add if not deleted and no text collision
+            if (deletedIds.has(entry.id))      continue;
+            if (existingTexts.has(entry.word)) continue;
+            const { imageDataURL, ...wordMeta } = entry;
+            wordMeta._defWordVersion = entry.wordVersion || 1;
+            wordMeta._customFields   = [];
+            await saveWord(wordMeta);
+            if (imageDataURL) await saveImage({ id: wordMeta.id, dataURL: imageDataURL });
+            added++;
+        } else {
+            // Existing word — check if default-data has a newer version
+            const storedVersion = existingWord._defWordVersion || 0;
+            const newVersion    = entry.wordVersion || 1;
+            if (newVersion <= storedVersion) continue;
+
+            const customFields = existingWord._customFields || [];
+            let changed = false;
+
+            // Update image if not customised by user
+            if (!customFields.includes('image') && entry.imageDataURL) {
+                await saveImage({ id: entry.id, dataURL: entry.imageDataURL });
+                changed = true;
+            }
+
+            // Future: update other fields here based on customFields
+
+            existingWord._defWordVersion = newVersion;
+            await saveWord(existingWord);
+            if (changed) updated++;
+        }
     }
-    if (added > 0) console.log(`syncDefaultWords: added ${added} new default words`);
+    if (added   > 0) console.log(`syncDefaultWords: added ${added} new default words`);
+    if (updated > 0) console.log(`syncDefaultWords: updated images for ${updated} default words`);
 }
 

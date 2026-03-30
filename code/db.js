@@ -132,6 +132,8 @@ async function exportAllData() {
     const timerDuration  = await getSetting('timerDuration');
     const categories     = await getSetting('categories');
     const pixabayKey     = await getSetting('pixabayKey');
+    const unsplashKey    = await getSetting('unsplashKey');
+    const pexelsKey      = await getSetting('pexelsKey');
     const wordsPerGame   = await getSetting('wordsPerGame');
     const buttonsCount   = await getSetting('buttonsCount');
     const buttonsRows    = await getSetting('buttonsRows');
@@ -147,7 +149,9 @@ async function exportAllData() {
         settings: {
             timerDuration:        timerDuration ?? 5,
             categories:           categories || null,
-            pixabayKey:           pixabayKey || '',
+            pixabayKey:           pixabayKey  || '',
+            unsplashKey:          unsplashKey || '',
+            pexelsKey:            pexelsKey   || '',
             wordsPerGame:         wordsPerGame ?? 10,
             buttonsCount:         buttonsCount ?? 4,
             buttonsRows:          buttonsRows  ?? null,
@@ -174,8 +178,9 @@ async function importAllData(data) {
         await setSetting('timerDuration', Number(data.settings.timerDuration));
     if (data.settings?.categories)
         await setSetting('categories', data.settings.categories);
-    if (data.settings?.pixabayKey != null)
-        await setSetting('pixabayKey', data.settings.pixabayKey);
+    if (data.settings?.pixabayKey  != null) await setSetting('pixabayKey',  data.settings.pixabayKey);
+    if (data.settings?.unsplashKey != null) await setSetting('unsplashKey', data.settings.unsplashKey);
+    if (data.settings?.pexelsKey   != null) await setSetting('pexelsKey',   data.settings.pexelsKey);
     if (data.settings?.wordsPerGame != null)
         await setSetting('wordsPerGame', Number(data.settings.wordsPerGame));
     if (data.settings?.buttonsCount != null)
@@ -194,6 +199,17 @@ async function importAllData(data) {
         await setSetting('showSilentLetterWords', Boolean(data.settings.showSilentLetterWords));
     if (Array.isArray(data.settings?.deletedDefaultIds))
         await setSetting('deletedDefaultIds', data.settings.deletedDefaultIds);
+}
+
+// Migration: add _customFields:[] to words that don't have it yet
+async function migrateCustomFields() {
+    const words = await getAllWords();
+    for (const word of words) {
+        if (!Array.isArray(word._customFields)) {
+            word._customFields = [];
+            await saveWord(word);
+        }
+    }
 }
 
 // Category helpers

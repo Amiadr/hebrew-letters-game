@@ -54,6 +54,7 @@ const EMOJI_LIST = [
 
 let adminWords = [];
 let pendingNewImage = null;
+let pendingDeleteImage = false;
 let editingWordId = null;
 let selectedCategoryIcon = '⭐';
 let newCatSelectedIcon = '⭐';
@@ -285,6 +286,7 @@ function renderIconPicker(containerId, selectedIcon, onSelect) {
 function openAddWord() {
     editingWordId = null;
     pendingNewImage = null;
+    pendingDeleteImage = false;
     document.getElementById('form-title').textContent = 'הוסף מילה חדשה';
     document.getElementById('input-word').value = '';
     document.getElementById('input-silent-letter').checked = false;
@@ -299,6 +301,11 @@ async function toggleWordActive(id, isActive) {
     const word = await getWord(id);
     if (!word) return;
     word.active = isActive;
+    if (id.startsWith('def_')) {
+        const cf = new Set(word._customFields || []);
+        cf.add('active');
+        word._customFields = Array.from(cf);
+    }
     await saveWord(word);
     const card = document.querySelector(`.admin-word-card[data-word-id="${id}"]`);
     if (card) {
@@ -314,6 +321,7 @@ async function toggleWordActive(id, isActive) {
 async function openEditWord(id) {
     editingWordId = id;
     pendingNewImage = null;
+    pendingDeleteImage = false;
     const word = adminWords.find(w => w.id === id);
     if (!word) return;
     document.getElementById('form-title').textContent = 'ערוך מילה';
@@ -331,17 +339,19 @@ async function openEditWord(id) {
 function closeWordForm() {
     document.getElementById('word-form-modal').classList.add('hidden');
     pendingNewImage = null;
+    pendingDeleteImage = false;
     editingWordId = null;
     clearImageSearch();
 }
 
-function clearImagePreview() {
+function clearImagePreview(userAction = false) {
     document.getElementById('img-preview').src = '';
     document.getElementById('img-preview-wrap').style.display = 'none';
     document.getElementById('img-placeholder').style.display = 'flex';
     const replEl = document.getElementById('img-upload-replace');
     if (replEl) replEl.style.display = 'none';
     pendingNewImage = null;
+    if (userAction && editingWordId) pendingDeleteImage = true;
 }
 
 function showImagePreview(url, isNew = true) {
@@ -392,6 +402,8 @@ async function saveWordForm() {
 
     // Fetch existing word to preserve fields (imageURL, dateAdded, active, etc.)
     const existingWord = isEditing ? (await getWord(id)) : null;
+    const customFields = new Set(existingWord?._customFields || []);
+
     const wordData = {
         ...(existingWord || {}),
         id,
@@ -403,7 +415,19 @@ async function saveWordForm() {
         hasSilentLetter: document.getElementById('input-silent-letter').checked
     };
 
-    if (pendingNewImage?.dataURL) {
+    // Track which fields the user changed on an existing default word
+    if (isEditing && existingWord?.id?.startsWith('def_')) {
+        if (wordText     !== existingWord.word)            customFields.add('word');
+        if (categoryName !== existingWord.category)        customFields.add('category');
+        if (wordData.hasSilentLetter !== existingWord.hasSilentLetter) customFields.add('hasSilentLetter');
+    }
+
+    if (pendingDeleteImage) {
+        // User explicitly removed the image → delete from DB
+        await deleteImage(id);
+        wordData.imageURL = null;
+        wordData._defWordVersion = existingWord?._defWordVersion ?? 0;
+    } else if (pendingNewImage?.dataURL) {
         // Locally uploaded image → store in IndexedDB, clear any stale external URL
         await saveImage({ id, dataURL: pendingNewImage.dataURL });
         wordData.imageURL = null;
@@ -411,16 +435,21 @@ async function saveWordForm() {
         // External URL — try to download and save locally so it works offline
         const dataURL = await fetchImageAsDataURL(pendingNewImage.url);
         if (dataURL) {
-            // Success: image is now stored locally, no internet needed
             await saveImage({ id, dataURL });
             wordData.imageURL = null;
         } else {
-            // CORS blocked conversion — keep URL as fallback (requires internet)
             await deleteImage(id);
             wordData.imageURL = pendingNewImage.url;
         }
     }
-    // else: no new image selected → existing imageURL preserved via spread above
+    // else: no new image selected → existing image preserved via spread above
+
+    // Track image change only for default words
+    if ((pendingDeleteImage || pendingNewImage) && id.startsWith('def_')) {
+        customFields.add('image');
+    }
+
+    wordData._customFields = Array.from(customFields);
 
     await saveWord(wordData);
     closeWordForm();
@@ -476,12 +505,13 @@ function appendSearchResults(wrap, results) {
         const div = document.createElement('div');
         div.className = 'search-img-item';
         div.title = r.title;
+        if (r.attribution) div.dataset.attribution = r.attribution;
         const img = document.createElement('img');
         img.src = r.url;
         img.alt = r.title;
         img.loading = 'lazy';
         img.onerror = () => div.style.display = 'none';
-        div.addEventListener('click', (e) => selectSearchImage(r.url, e.currentTarget));
+        div.addEventListener('click', (e) => selectSearchImage(r.url, e.currentTarget, r.attribution || ''));
         div.appendChild(img);
         wrap.appendChild(div);
     });
@@ -533,16 +563,23 @@ async function loadMoreImages() {
     if (results.length >= 20) addLoadMoreButton(wrap);
 }
 
-function selectSearchImage(url, el) {
+function selectSearchImage(url, el, attribution) {
     showImagePreview(url, true);
     pendingNewImage = { url };
     document.querySelectorAll('.search-img-item').forEach(i => i.classList.remove('selected'));
     if (el) el.classList.add('selected');
+    const attrEl = document.getElementById('img-attribution-line');
+    if (attrEl) {
+        attrEl.textContent = attribution || '';
+        attrEl.style.display = attribution ? '' : 'none';
+    }
 }
 
 function clearImageSearch() {
     const wrap = document.getElementById('img-search-results');
     if (wrap) { wrap.innerHTML = ''; wrap.style.display = 'none'; }
+    const attrEl = document.getElementById('img-attribution-line');
+    if (attrEl) { attrEl.textContent = ''; attrEl.style.display = 'none'; }
     currentSearchTerm = '';
     currentSearchPage = 1;
 }
@@ -579,6 +616,14 @@ async function loadSettings() {
     const key = (await getSetting('pixabayKey')) || '';
     document.getElementById('pixabay-key-input').value = key;
     updatePixabayStatus(key);
+
+    const unsplashKey = (await getSetting('unsplashKey')) || '';
+    document.getElementById('unsplash-key-input').value = unsplashKey;
+    updateApiKeyStatus('unsplash-status', unsplashKey, 'Unsplash');
+
+    const pexelsKey = (await getSetting('pexelsKey')) || '';
+    document.getElementById('pexels-key-input').value = pexelsKey;
+    updateApiKeyStatus('pexels-status', pexelsKey, 'Pexels');
 
     const wordsCount = (await getSetting('wordsPerGame')) ?? 10;
     const activeCount = (await getAllWords()).filter(w => w.active !== false).length;
@@ -702,6 +747,32 @@ async function savePixabayKey() {
     showAdminToast(key ? 'מפתח Pixabay נשמר' : 'מפתח Pixabay נמחק');
 }
 
+async function saveUnsplashKey() {
+    const key = document.getElementById('unsplash-key-input').value.trim();
+    await setSetting('unsplashKey', key);
+    updateApiKeyStatus('unsplash-status', key, 'Unsplash');
+    showAdminToast(key ? 'מפתח Unsplash נשמר' : 'מפתח Unsplash נמחק');
+}
+
+async function savePexelsKey() {
+    const key = document.getElementById('pexels-key-input').value.trim();
+    await setSetting('pexelsKey', key);
+    updateApiKeyStatus('pexels-status', key, 'Pexels');
+    showAdminToast(key ? 'מפתח Pexels נשמר' : 'מפתח Pexels נמחק');
+}
+
+function updateApiKeyStatus(elementId, key, serviceName) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    if (key) {
+        el.textContent = '✅ ' + serviceName + ' פעיל';
+        el.style.color = '#2E7D32';
+    } else {
+        el.textContent = '⚪ לא מוגדר';
+        el.style.color = '#888';
+    }
+}
+
 function updatePixabayStatus(key) {
     const el = document.getElementById('pixabay-status');
     if (!el) return;
@@ -763,10 +834,36 @@ function updateHintPresetsUI(val) {
     });
 }
 
+// ===== EXPORT API KEYS MODAL =====
+let _exportKeysResolve = null;
+
+function resolveExportKeysModal(value) {
+    document.getElementById('export-keys-modal').classList.add('hidden');
+    if (_exportKeysResolve) { _exportKeysResolve(value); _exportKeysResolve = null; }
+}
+
+function askExportKeys(names) {
+    return new Promise(resolve => {
+        _exportKeysResolve = resolve;
+        document.getElementById('export-keys-msg').textContent =
+            'נמצאו מפתחות API (' + names + ').\nכיצד לייצא?';
+        document.getElementById('export-keys-modal').classList.remove('hidden');
+        setTimeout(() => document.getElementById('export-keys-default-btn')?.focus(), 50);
+    });
+}
+
 // ===== EXPORT / IMPORT =====
 async function exportData() {
     try {
         const data = await exportAllData();
+        const keyFields = ['pixabayKey', 'unsplashKey', 'pexelsKey'];
+        const foundKeys = keyFields.filter(k => data.settings?.[k]);
+        if (foundKeys.length > 0) {
+            const names = foundKeys.map(k => k.replace('Key', '')).join(', ');
+            const choice = await askExportKeys(names);
+            if (choice === null) return;                               // ביטול
+            if (choice === false) foundKeys.forEach(k => { data.settings[k] = ''; }); // בלי מפתחות
+        }
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -779,14 +876,184 @@ async function exportData() {
 }
 
 function triggerImport() { document.getElementById('import-file-input').click(); }
+function triggerMerge()  { document.getElementById('merge-file-input').click(); }
+
+// ===== MERGE CONFLICTS MODAL =====
+let _mergeConflictsResolve = null;
+
+function resolveMergeConflictsModal(value) {
+    document.getElementById('merge-conflicts-modal').classList.add('hidden');
+    if (_mergeConflictsResolve) { _mergeConflictsResolve(value); _mergeConflictsResolve = null; }
+}
+
+function askMergeConflicts(newCount, conflictWords) {
+    return new Promise(resolve => {
+        _mergeConflictsResolve = resolve;
+        const MAX_SHOW = 8;
+        const names = conflictWords.slice(0, MAX_SHOW).map(c => c.entry.word).join(', ');
+        const extra  = conflictWords.length > MAX_SHOW ? ` ועוד ${conflictWords.length - MAX_SHOW} נוספות` : '';
+        document.getElementById('merge-summary').textContent =
+            newCount > 0 ? `${newCount} מילים חדשות יתווספו.` : 'אין מילים חדשות להוסיף.';
+        document.getElementById('merge-conflict-list').textContent =
+            `${conflictWords.length} מילים כבר קיימות אצלך: ${names}${extra}`;
+        document.getElementById('merge-conflicts-modal').classList.remove('hidden');
+        setTimeout(() => document.getElementById('merge-keep-btn')?.focus(), 50);
+    });
+}
+
+// ===== MERGE =====
+async function handleMerge(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
+    try {
+        const data = JSON.parse(await file.text());
+        if (!data?.words?.length) { alert('קובץ לא תקין'); return; }
+
+        const existing     = await getAllWords();
+        const existingMap  = new Map(existing.map(w => [w.id, w]));
+        const existingText = new Map(existing.map(w => [w.word, w]));
+
+        const newWords = [], conflictWords = [], defUpdates = [];
+
+        for (const entry of data.words) {
+            if (entry.id?.startsWith('def_')) {
+                const local = existingMap.get(entry.id);
+                if (local && (entry.wordVersion ?? 1) > (local._defWordVersion ?? 0))
+                    defUpdates.push({ entry, local });
+            } else {
+                const local = existingText.get(entry.word);
+                if (!local) newWords.push(entry);
+                else conflictWords.push({ entry, local });
+            }
+        }
+
+        // If nothing to do
+        if (newWords.length === 0 && defUpdates.length === 0 && conflictWords.length === 0) {
+            showAdminToast('אין מידע חדש לייבא');
+            return;
+        }
+
+        // Resolve conflicts if any
+        let overwriteConflicts = false;
+        if (conflictWords.length > 0) {
+            const choice = await askMergeConflicts(newWords.length + defUpdates.length, conflictWords);
+            if (choice === null) return;
+            overwriteConflicts = choice === 'overwrite';
+        }
+
+        // Apply def_ updates (respect _customFields)
+        for (const { entry, local } of defUpdates) {
+            const { imageDataURL, ...wordMeta } = entry;
+            const cf      = local._customFields || [];
+            const updated = { ...local, _defWordVersion: entry.wordVersion ?? 1 };
+            if (!cf.includes('word'))           updated.word           = wordMeta.word;
+            if (!cf.includes('category'))       updated.category       = wordMeta.category;
+            if (!cf.includes('category'))       updated.categoryIcon   = wordMeta.categoryIcon;
+            if (!cf.includes('hasSilentLetter')) updated.hasSilentLetter = wordMeta.hasSilentLetter;
+            await saveWord(updated);
+            if (imageDataURL && !cf.includes('image'))
+                await saveImage({ id: local.id, dataURL: imageDataURL });
+        }
+
+        // Add new user words
+        for (const entry of newWords) {
+            const { imageDataURL, ...wordMeta } = entry;
+            await saveWord(wordMeta);
+            if (imageDataURL) await saveImage({ id: wordMeta.id, dataURL: imageDataURL });
+        }
+
+        // Overwrite conflicts if chosen (keep local ID)
+        if (overwriteConflicts) {
+            for (const { entry, local } of conflictWords) {
+                const { imageDataURL, ...wordMeta } = entry;
+                await saveWord({ ...wordMeta, id: local.id });
+                if (imageDataURL) await saveImage({ id: local.id, dataURL: imageDataURL });
+            }
+        }
+
+        await refreshAdminList();
+        const total = defUpdates.length + newWords.length + (overwriteConflicts ? conflictWords.length : 0);
+        showAdminToast(`המיזוג הושלם — ${total} מילים עודכנו`);
+    } catch (err) { alert('שגיאה במיזוג: ' + err.message); }
+}
+
+// ===== IMPORT API KEYS MODAL =====
+let _importKeysResolve = null;
+
+function resolveImportKeysModal(value) {
+    document.getElementById('import-keys-modal').classList.add('hidden');
+    if (_importKeysResolve) { _importKeysResolve(value); _importKeysResolve = null; }
+}
+
+async function askImportKeys(foundKeys, conflictingKeys) {
+    return new Promise(resolve => {
+        _importKeysResolve = resolve;
+        const infoEl = document.getElementById('import-keys-info');
+        const foundNames     = foundKeys.map(k => k.replace('Key', '')).join(', ');
+        const conflictNames  = conflictingKeys.map(k => k.replace('Key', '')).join(', ');
+        const newKeys        = foundKeys.filter(k => !conflictingKeys.includes(k));
+        const newNames       = newKeys.map(k => k.replace('Key', '')).join(', ');
+        let info = 'מפתחות בקובץ: ' + foundNames;
+        if (conflictingKeys.length > 0) info += '\nמפתחות קיימים שיידרסו: ' + conflictNames;
+        if (newKeys.length > 0)         info += '\nמפתחות חדשים שיתווספו: ' + newNames;
+        infoEl.style.whiteSpace = 'pre-line';
+        infoEl.textContent = info;
+
+        const newBtn  = document.getElementById('import-keys-default-btn');
+        const noneBtn = document.querySelector('#import-keys-modal [onclick="resolveImportKeysModal(\'none\')"]');
+        const allBtn  = document.querySelector('#import-keys-modal [onclick="resolveImportKeysModal(\'all\')"]');
+
+        // Reset styles
+        [newBtn, noneBtn, allBtn].forEach(b => {
+            if (!b) return;
+            b.className = 'btn-cancel-modal';
+            b.style.background = '';
+            b.style.color = '';
+            b.style.display = '';
+        });
+
+        // Pick default button
+        const primaryBtn = newKeys.length > 0 ? newBtn : noneBtn;
+        if (newKeys.length === 0 && newBtn) newBtn.style.display = 'none';
+        if (primaryBtn) {
+            primaryBtn.className = 'btn-save';
+            primaryBtn.style.background = '#1565C0';
+            primaryBtn.style.color = 'white';
+        }
+
+        document.getElementById('import-keys-modal').classList.remove('hidden');
+        setTimeout(() => primaryBtn?.focus(), 50);
+    });
+}
 
 async function handleImport(e) {
     const file = e.target.files[0];
     if (!file) return;
     e.target.value = '';
-    if (!confirm('יבוא זה יחליף את כל המילים הקיימות. להמשיך?')) return;
+    if (!confirm('יבוא זה יחליף את כל המילים וההגדרות הקיימות. להמשיך?')) return;
     try {
         const data = JSON.parse(await file.text());
+        const keyFields   = ['pixabayKey', 'unsplashKey', 'pexelsKey'];
+        const foundKeys   = keyFields.filter(k => data.settings?.[k]);
+        if (foundKeys.length > 0) {
+            // Check which keys already exist locally
+            const conflictingKeys = [];
+            for (const k of foundKeys) {
+                const existing = await getSetting(k);
+                if (existing) conflictingKeys.push(k);
+            }
+            const choice = await askImportKeys(foundKeys, conflictingKeys);
+            if (choice === null) return;                          // ביטול
+            if (choice === 'none') {
+                // Remove all API keys from import data so importAllData won't touch them
+                keyFields.forEach(k => { if (data.settings) delete data.settings[k]; });
+            } else if (choice === 'new') {
+                // Remove only conflicting keys — new keys will still be imported
+                conflictingKeys.forEach(k => { if (data.settings) delete data.settings[k]; });
+            }
+            // 'all' → import as-is
+        }
         await importAllData(data);
         await refreshAdminList();
         await loadSettings();
