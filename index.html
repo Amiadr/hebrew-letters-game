@@ -309,13 +309,13 @@ body {
 .toggle-switch input:checked + .toggle-slider:before { transform: translateX(22px); }
 
 .restart-btn {
-    background: linear-gradient(135deg, #E53935, #C62828);
+    background: linear-gradient(135deg, #43A047, #66BB6A);
     color: white; border: none; border-radius: 50px;
     padding: 22px 60px; font-size: 1.8rem; font-weight: bold;
-    cursor: pointer; box-shadow: 0 6px 0 #7F0000;
+    cursor: pointer; box-shadow: 0 6px 0 #2E7D32;
     transition: transform .1s, box-shadow .1s;
 }
-.restart-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #7F0000; }
+.restart-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #2E7D32; }
 
 /* ===== ADMIN SCREEN ===== */
 #screen-admin { padding: 0; justify-content: flex-start; min-height: 100vh; }
@@ -719,6 +719,8 @@ body {
 </div>
 
 <!-- ===== END SCREEN ===== -->
+<canvas id="fireworks-canvas" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:999;display:none;"></canvas>
+
 <div id="screen-end" class="screen">
     <div style="font-size:4rem">🏆</div>
     <h1 id="end-title-text">כל הכבוד!</h1>

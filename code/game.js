@@ -384,6 +384,99 @@ function showEndScreen() {
     const name = gameState.playerName;
     document.getElementById('end-title-text').textContent = name ? `כל הכבוד, ${name}!` : 'כל הכבוד!';
     showScreen('screen-end');
+    launchFireworks(6000);
+}
+
+// ===== FIREWORKS =====
+function launchFireworks(durationMs) {
+    const canvas = document.getElementById('fireworks-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+    canvas.style.display = '';
+
+    const particles = [];
+    const COLORS = ['#FF4081','#FFD740','#40C4FF','#69F0AE','#FF6D00','#E040FB','#FFFFFF'];
+
+    function spawnBurst() {
+        const x = Math.random() * canvas.width;
+        const y = Math.random() * canvas.height * 0.6;
+        const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+        for (let i = 0; i < 60; i++) {
+            const angle = (Math.PI * 2 * i) / 60;
+            const speed = 2 + Math.random() * 5;
+            particles.push({
+                x, y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                alpha: 1,
+                color,
+                radius: 2 + Math.random() * 2
+            });
+        }
+    }
+
+    function spawnBurstGroup() {
+        const count = 2 + Math.floor(Math.random() * 2); // 2-3 bursts at once
+        for (let b = 0; b < count; b++) {
+            // Concentrate in center 60% of width, top 65% of height
+            const x = canvas.width  * 0.2 + Math.random() * canvas.width  * 0.6;
+            const y = canvas.height * 0.1 + Math.random() * canvas.height * 0.55;
+            const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+            for (let i = 0; i < 80; i++) {
+                const angle = (Math.PI * 2 * i) / 80;
+                const speed = 2 + Math.random() * 6;
+                particles.push({
+                    x, y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    alpha: 1,
+                    color,
+                    radius: 2 + Math.random() * 2.5
+                });
+            }
+        }
+    }
+
+    let burstInterval = setInterval(spawnBurstGroup, 350);
+    spawnBurstGroup();
+
+    let animId;
+    let fadeStart = null;
+    function animate(ts) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // Fade out canvas itself during last 2s
+        const fadeAlpha = fadeStart ? Math.max(0, 1 - (ts - fadeStart) / 2000) : 1;
+        canvas.style.opacity = fadeAlpha;
+
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const p = particles[i];
+            p.x  += p.vx;
+            p.y  += p.vy;
+            p.vy += 0.09; // gravity
+            p.alpha -= 0.016;
+            if (p.alpha <= 0) { particles.splice(i, 1); continue; }
+            ctx.globalAlpha = p.alpha;
+            ctx.fillStyle   = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        if (fadeAlpha > 0) animId = requestAnimationFrame(animate);
+        else {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            canvas.style.display = 'none';
+            canvas.style.opacity = 1;
+        }
+    }
+    animate(performance.now());
+
+    setTimeout(() => {
+        clearInterval(burstInterval);
+        fadeStart = performance.now();
+    }, durationMs);
 }
 
 function showScreen(id) {
