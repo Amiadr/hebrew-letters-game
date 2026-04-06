@@ -6,6 +6,11 @@ const STORE_IMAGES = 'images';
 const STORE_SETTINGS = 'settings';
 
 let db = null;
+let _suppressSyncNotify = false;
+
+// Notify sync.js of changes (only when app is fully initialized)
+function _onDataChange()       { if (!_suppressSyncNotify && window._appReady && typeof notifyDataChanged  === 'function') notifyDataChanged(); }
+function _onImageChange(id)    { if (!_suppressSyncNotify && window._appReady && typeof notifyImageChanged === 'function') notifyImageChanged(id); }
 
 async function initDB() {
     return new Promise((resolve, reject) => {
@@ -58,9 +63,9 @@ function txGetAll(storeName) {
 
 async function getAllWords() { return txGetAll(STORE_WORDS); }
 async function getWord(id) { return txGet(STORE_WORDS, id); }
-async function saveWord(w) { return txPut(STORE_WORDS, w); }
+async function saveWord(w) { await txPut(STORE_WORDS, w); _onDataChange(); }
 async function getImage(id) { return txGet(STORE_IMAGES, id); }
-async function saveImage(img) { return txPut(STORE_IMAGES, img); }
+async function saveImage(img) { await txPut(STORE_IMAGES, img); _onImageChange(img.id); }
 async function getAllImageIds() {
     return new Promise((resolve, reject) => {
         const t = db.transaction(STORE_IMAGES, 'readonly');
@@ -74,7 +79,7 @@ async function getSetting(key) {
     const rec = await txGet(STORE_SETTINGS, key);
     return rec !== undefined ? rec.value : null;
 }
-async function setSetting(key, value) { return txPut(STORE_SETTINGS, { key, value }); }
+async function setSetting(key, value) { await txPut(STORE_SETTINGS, { key, value }); _onDataChange(); }
 
 async function deleteWordById(id) {
     // If this is a default word, record it as deleted so sync won't re-add it
@@ -85,22 +90,25 @@ async function deleteWordById(id) {
             await setSetting('deletedDefaultIds', deleted);
         }
     }
-    return new Promise((resolve, reject) => {
+    await new Promise((resolve, reject) => {
         const t = db.transaction([STORE_WORDS, STORE_IMAGES], 'readwrite');
         t.objectStore(STORE_WORDS).delete(id);
         t.objectStore(STORE_IMAGES).delete(id);
         t.oncomplete = () => resolve();
         t.onerror = () => reject(t.error);
     });
+    _onDataChange();
+    _onImageChange(id);
 }
 
 async function deleteImage(id) {
-    return new Promise((resolve, reject) => {
+    await new Promise((resolve, reject) => {
         const t = db.transaction(STORE_IMAGES, 'readwrite');
         t.objectStore(STORE_IMAGES).delete(id);
         t.oncomplete = () => resolve();
         t.onerror = () => reject(t.error);
     });
+    _onImageChange(id);
 }
 
 async function clearAllData() {
@@ -168,6 +176,7 @@ async function exportAllData() {
 
 async function importAllData(data) {
     if (!data || !data.words) throw new Error('קובץ יבוא לא תקין');
+    _suppressSyncNotify = true;
     await clearAllData();
     for (const entry of data.words) {
         const { imageDataURL, ...wordMeta } = entry;
@@ -199,6 +208,7 @@ async function importAllData(data) {
         await setSetting('showSilentLetterWords', Boolean(data.settings.showSilentLetterWords));
     if (Array.isArray(data.settings?.deletedDefaultIds))
         await setSetting('deletedDefaultIds', data.settings.deletedDefaultIds);
+    _suppressSyncNotify = false;
 }
 
 // Migration: add _customFields:[] to words that don't have it yet
