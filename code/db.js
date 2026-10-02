@@ -151,6 +151,7 @@ async function exportAllData() {
     const letterAnimationEnabled = await getSetting('letterAnimationEnabled');
     const showSilentLetterWords  = await getSetting('showSilentLetterWords');
     const deletedDefaultIds      = await getSetting('deletedDefaultIds');
+    const gameMode               = await getSetting('gameMode');
     return {
         version: 2,
         exportDate: new Date().toISOString().split('T')[0],
@@ -168,7 +169,8 @@ async function exportAllData() {
             playerNameEnabled:    playerNameEnabled !== false,
             letterAnimationEnabled: letterAnimationEnabled !== false,
             showSilentLetterWords:  showSilentLetterWords === true,
-            deletedDefaultIds:      deletedDefaultIds || []
+            deletedDefaultIds:      deletedDefaultIds || [],
+            gameMode:               gameMode || 'letters'
         },
         words: exported
     };
@@ -208,6 +210,8 @@ async function importAllData(data) {
         await setSetting('showSilentLetterWords', Boolean(data.settings.showSilentLetterWords));
     if (Array.isArray(data.settings?.deletedDefaultIds))
         await setSetting('deletedDefaultIds', data.settings.deletedDefaultIds);
+    if (['letters', 'reading', 'mixed'].includes(data.settings?.gameMode))
+        await setSetting('gameMode', data.settings.gameMode);
     _suppressSyncNotify = false;
 }
 

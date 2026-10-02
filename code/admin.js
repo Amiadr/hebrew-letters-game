@@ -640,6 +640,10 @@ async function loadSettings() {
     updateButtonsCountUI(savedCount);
     updateButtonsRowsUI(savedRows);
 
+    // Game mode (letters / reading / mixed)
+    if (typeof updateGameModeUI === 'function')
+        updateGameModeUI((await getSetting('gameMode')) || 'letters');
+
     // Player name enabled
     const pnEnabled = await getSetting('playerNameEnabled');
     const pnToggle  = document.getElementById('player-name-enabled-toggle');

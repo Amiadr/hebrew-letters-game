@@ -26,7 +26,9 @@ let gameState = {
     currentWordErrors: 0,    // errors on the current word (resets per word)
     wordStats: [],           // { word, category, categoryIcon, errors, wasSkipped }
     letterAnimationEnabled: true,
-    playerName: ''
+    playerName: '',
+    gameMode: 'letters',     // 'letters' | 'reading' | 'mixed'
+    currentWordMode: 'letters' // resolved mode for the current word
 };
 
 let successTimer = null;
@@ -129,6 +131,14 @@ async function startGame() {
         return;
     }
 
+    gameState.allWords = active;
+    gameState.gameMode = (await getSetting('gameMode')) || 'letters';
+    if (gameState.gameMode !== 'letters' && active.length < 2) {
+        showScreen('screen-start');
+        alert('מצב קריאה דורש לפחות 2 מילים פעילות עם תמונה.');
+        return;
+    }
+
     gameState.sessionWords = await getNextSessionWords(active, wordsPerGame);
     gameState.currentWordIndex = 0;
     gameState.skippedWordIds = new Set();
@@ -194,10 +204,84 @@ function showCurrentWord() {
     document.getElementById('category-icon').textContent = word.categoryIcon || '📦';
     document.getElementById('category-name').textContent = word.category || '';
 
+    // Resolve mode for this word
+    gameState.currentWordMode = gameState.gameMode === 'mixed'
+        ? (Math.random() < 0.5 ? 'letters' : 'reading')
+        : gameState.gameMode;
+    const reading = gameState.currentWordMode === 'reading';
+    document.getElementById('image-wrap').style.display            = reading ? 'none' : '';
+    document.getElementById('word-slots').style.display            = reading ? 'none' : '';
+    document.getElementById('letter-buttons').style.display        = reading ? 'none' : '';
+    document.getElementById('reading-word-display').style.display  = reading ? '' : 'none';
+    document.getElementById('image-choices').style.display         = reading ? '' : 'none';
+
+    if (reading) {
+        renderReadingWord(word);
+        return;
+    }
+
     // Image
     loadWordImage(word);
     renderWordSlots();
     renderLetterButtons();
+}
+
+// ===== READING MODE =====
+// Show the word as text; the child picks the matching image out of several.
+function renderReadingWord(word) {
+    document.getElementById('reading-word-display').textContent = word.word;
+
+    const count = Math.max(2, gameState.buttonsCount);
+    // Distractors: other active words (different text), random
+    const others = gameState.allWords.filter(w => w.id !== word.id && w.word !== word.word);
+    const distractors = seededShuffle(others, Math.floor(Date.now())).slice(0, count - 1);
+    const choices = seededShuffle([word, ...distractors], Math.floor(Date.now() / 7));
+
+    const container = document.getElementById('image-choices');
+    container.innerHTML = '';
+    container.classList.toggle('cols-3', choices.length > 4);
+
+    choices.forEach(w => {
+        const card = document.createElement('div');
+        card.className = 'image-choice';
+        card.dataset.wordId = w.id;
+        const img = document.createElement('img');
+        img.src = createPlaceholderSVG(w.categoryIcon || '📷');
+        img.alt = '';
+        img.draggable = false;
+        card.appendChild(img);
+        getWordImageSrc(w).then(src => { if (src) img.src = src; });
+        card.addEventListener('click', () => handleImageChoice(w, card));
+        container.appendChild(card);
+    });
+}
+
+function handleImageChoice(chosen, card) {
+    if (card.classList.contains('disabled')) return;
+    if (typeof getAudioCtx === 'function') getAudioCtx();
+    const word = gameState.sessionWords[gameState.currentWordIndex];
+
+    if (chosen.id === word.id) {
+        playSuccess();
+        card.classList.remove('choice-hint');
+        card.classList.add('choice-correct');
+        document.querySelectorAll('.image-choice').forEach(c => c.classList.add('disabled'));
+        setTimeout(showWordSuccess, 500);
+    } else {
+        playError();
+        card.classList.add('disabled', 'choice-wrong', 'btn-shake');
+        const overlay = document.createElement('div');
+        overlay.className = 'wrong-overlay';
+        overlay.textContent = '✗';
+        card.appendChild(overlay);
+        gameState.currentWordErrors++;
+        gameState.currentLetterErrors++;
+        setTimeout(() => card.classList.remove('btn-shake'), 400);
+        if (gameState.hintEnabled && gameState.currentLetterErrors >= gameState.hintAfterErrors) {
+            const correct = document.querySelector(`.image-choice[data-word-id="${word.id}"]`);
+            if (correct) correct.classList.add('choice-hint');
+        }
+    }
 }
 
 async function loadWordImage(word) {
@@ -327,7 +411,8 @@ async function showWordSuccess() {
         category:     word.category     || '',
         categoryIcon: word.categoryIcon || '📦',
         errors:       gameState.currentWordErrors,
-        wasSkipped:   gameState.skippedWordIds.has(word.id)
+        wasSkipped:   gameState.skippedWordIds.has(word.id),
+        mode:         gameState.currentWordMode
     });
 
     // Personalised greeting
@@ -524,6 +609,24 @@ async function initStartScreen() {
     const input = document.getElementById('player-name-input');
     if (input) input.value = name;
     updateWordFilterLabel();
+    updateGameModeUI((await getSetting('gameMode')) || 'letters');
+}
+
+// ===== GAME MODE =====
+const GAME_MODE_LABELS = { letters: '🔤 בניית מילה', reading: '📖 קריאה', mixed: '🔀 מעורב' };
+
+function updateGameModeUI(mode) {
+    document.querySelectorAll('.mode-btn[data-mode]').forEach(btn => {
+        btn.classList.toggle('active-mode', btn.dataset.mode === mode);
+    });
+}
+
+async function setGameMode(mode) {
+    if (!GAME_MODE_LABELS[mode]) mode = 'letters';
+    await setSetting('gameMode', mode);
+    updateGameModeUI(mode);
+    if (document.querySelector('#screen-admin.active') && typeof showAdminToast === 'function')
+        showAdminToast(`מצב משחק: ${GAME_MODE_LABELS[mode]}`);
 }
 
 async function savePlayerName(val) {
@@ -602,8 +705,11 @@ function showParentReport() {
             const skippedBadge = s.wasSkipped
                 ? ' <span style="font-size:.75rem;background:#FFF3E0;color:#E65100;border-radius:6px;padding:2px 6px;">דולג</span>'
                 : '';
+            const modeBadge = s.mode === 'reading'
+                ? ' <span title="מצב קריאה" style="font-size:.75rem;background:#E3F2FD;color:#1565C0;border-radius:6px;padding:2px 6px;">📖</span>'
+                : '';
             html += `<tr>
-                <td><strong>${s.categoryIcon} ${s.word}</strong>${skippedBadge}</td>
+                <td><strong>${s.categoryIcon} ${s.word}</strong>${modeBadge}${skippedBadge}</td>
                 <td>${s.category}</td>
                 <td style="color:${errColor}; font-weight:bold;">${s.errors}</td>
                 <td>${s.errors === 0 ? '⭐' : ''}</td>
