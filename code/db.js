@@ -1,9 +1,10 @@
 // IndexedDB wrapper for Hebrew Letters Game
 const DB_NAME = 'hebrewLettersGame';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_WORDS = 'words';
 const STORE_IMAGES = 'images';
 const STORE_SETTINGS = 'settings';
+const STORE_SESSIONS = 'sessions';
 
 let db = null;
 let _suppressSyncNotify = false;
@@ -11,6 +12,7 @@ let _suppressSyncNotify = false;
 // Notify sync.js of changes (only when app is fully initialized)
 function _onDataChange()       { if (!_suppressSyncNotify && window._appReady && typeof notifyDataChanged  === 'function') notifyDataChanged(); }
 function _onImageChange(id)    { if (!_suppressSyncNotify && window._appReady && typeof notifyImageChanged === 'function') notifyImageChanged(id); }
+function _onSessionsChange()   { if (!_suppressSyncNotify && window._appReady && typeof notifySessionsChanged === 'function') notifySessionsChanged(); }
 
 async function initDB() {
     return new Promise((resolve, reject) => {
@@ -29,6 +31,10 @@ async function initDB() {
             }
             if (!d.objectStoreNames.contains(STORE_SETTINGS)) {
                 d.createObjectStore(STORE_SETTINGS, { keyPath: 'key' });
+            }
+            if (!d.objectStoreNames.contains(STORE_SESSIONS)) {
+                const ss = d.createObjectStore(STORE_SESSIONS, { keyPath: 'id' });
+                ss.createIndex('startedAt', 'startedAt', { unique: false });
             }
         };
     });
@@ -80,6 +86,46 @@ async function getSetting(key) {
     return rec !== undefined ? rec.value : null;
 }
 async function setSetting(key, value) { await txPut(STORE_SETTINGS, { key, value }); _onDataChange(); }
+
+// ===== GAME SESSIONS (history for the statistics screen) =====
+async function getAllSessions() {
+    const list = await txGetAll(STORE_SESSIONS);
+    return list.sort((a, b) => (a.startedAt || 0) - (b.startedAt || 0));
+}
+async function saveSession(session) { await txPut(STORE_SESSIONS, session); _onSessionsChange(); }
+async function deleteSession(id) {
+    await new Promise((resolve, reject) => {
+        const t = db.transaction(STORE_SESSIONS, 'readwrite');
+        t.objectStore(STORE_SESSIONS).delete(id);
+        t.oncomplete = () => resolve();
+        t.onerror = () => reject(t.error);
+    });
+    _onSessionsChange();
+}
+async function clearAllSessions() {
+    await new Promise((resolve, reject) => {
+        const t = db.transaction(STORE_SESSIONS, 'readwrite');
+        t.objectStore(STORE_SESSIONS).clear();
+        t.oncomplete = () => resolve();
+        t.onerror = () => reject(t.error);
+    });
+    _onSessionsChange();
+}
+// Merge sessions coming from another source (Drive / import). Returns how many were new.
+async function mergeSessions(list) {
+    if (!Array.isArray(list)) return 0;
+    const existing = new Set((await txGetAll(STORE_SESSIONS)).map(s => s.id));
+    let added = 0;
+    _suppressSyncNotify = true;
+    try {
+        for (const s of list) {
+            if (!s || !s.id || existing.has(s.id)) continue;
+            await txPut(STORE_SESSIONS, s);
+            added++;
+        }
+    } finally { _suppressSyncNotify = false; }
+    return added;
+}
 
 async function deleteWordById(id) {
     // If this is a default word, record it as deleted so sync won't re-add it
@@ -152,6 +198,7 @@ async function exportAllData() {
     const showSilentLetterWords  = await getSetting('showSilentLetterWords');
     const deletedDefaultIds      = await getSetting('deletedDefaultIds');
     const gameMode               = await getSetting('gameMode');
+    const sessions               = await getAllSessions();
     return {
         version: 2,
         exportDate: new Date().toISOString().split('T')[0],
@@ -172,7 +219,8 @@ async function exportAllData() {
             deletedDefaultIds:      deletedDefaultIds || [],
             gameMode:               gameMode || 'letters'
         },
-        words: exported
+        words: exported,
+        sessions
     };
 }
 
@@ -213,6 +261,8 @@ async function importAllData(data) {
     if (['letters', 'reading', 'mixed'].includes(data.settings?.gameMode))
         await setSetting('gameMode', data.settings.gameMode);
     _suppressSyncNotify = false;
+    // Game history is merged (never cleared) so an import can't erase it
+    if (Array.isArray(data.sessions)) await mergeSessions(data.sessions);
 }
 
 // Migration: add _customFields:[] to words that don't have it yet

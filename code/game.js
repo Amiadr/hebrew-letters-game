@@ -28,7 +28,11 @@ let gameState = {
     letterAnimationEnabled: true,
     playerName: '',
     gameMode: 'letters',     // 'letters' | 'reading' | 'mixed'
-    currentWordMode: 'letters' // resolved mode for the current word
+    currentWordMode: 'letters', // resolved mode for the current word
+    // Session tracking (saved to history for the statistics screen)
+    session: null,           // { id, startedAt, playerName, gameMode, settings }
+    wordTrack: {},           // wordId → accumulated { timeMs, errors, hintShown, wrongPicks, letterErrors, attempts }
+    wordShownAt: 0           // timestamp when the current word was displayed
 };
 
 let successTimer = null;
@@ -115,6 +119,8 @@ async function startGame() {
     gameState.wordStats = [];
     gameState.currentWordErrors = 0;
     gameState.currentLetterErrors = 0;
+    gameState.wordTrack = {};
+    gameState.session = null;
 
     const allWords = await getAllWords();
     const showSilent = await getSetting('showSilentLetterWords');
@@ -143,6 +149,20 @@ async function startGame() {
     gameState.currentWordIndex = 0;
     gameState.skippedWordIds = new Set();
 
+    gameState.session = {
+        id:         'ses_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        startedAt:  Date.now(),
+        playerName: gameState.playerName,
+        gameMode:   gameState.gameMode,
+        settings: {
+            buttonsCount:     gameState.buttonsCount,
+            hintEnabled:      gameState.hintEnabled,
+            hintAfterErrors:  gameState.hintAfterErrors,
+            showSilentLetterWords: showSilent === true,
+            wordsPerGame
+        }
+    };
+
     document.getElementById('game-loading').style.display = 'none';
     document.getElementById('game-content').style.display = 'flex';
     showCurrentWord();
@@ -151,12 +171,63 @@ async function startGame() {
 function confirmStopGame() {
     if (confirm('לעצור את המשחק ולחזור לתפריט הראשי?')) {
         if (successTimer) { clearTimeout(successTimer); successTimer = null; }
+        saveGameSession(false);
         showScreen('screen-start');
     }
 }
 
+// ===== SESSION TRACKING =====
+function _track(wordId) {
+    if (!gameState.wordTrack[wordId]) {
+        gameState.wordTrack[wordId] = { timeMs: 0, errors: 0, hintShown: false, wrongPicks: [], letterErrors: {}, attempts: 0 };
+    }
+    return gameState.wordTrack[wordId];
+}
+
+// Add the time the current word has been on screen to its accumulator
+function _accumulateWordTime() {
+    const word = gameState.sessionWords[gameState.currentWordIndex];
+    if (!word || !gameState.wordShownAt) return;
+    _track(word.id).timeMs += Date.now() - gameState.wordShownAt;
+    gameState.wordShownAt = 0;
+}
+
+// Persist the session to history (completed = child reached the end screen)
+async function saveGameSession(completed) {
+    const ses = gameState.session;
+    if (!ses || ses.saved) return;
+    if (gameState.wordStats.length === 0) return; // nothing was played — don't record
+    ses.saved = true;
+    const endedAt = Date.now();
+    const record = {
+        id:          ses.id,
+        startedAt:   ses.startedAt,
+        endedAt,
+        durationMs:  endedAt - ses.startedAt,
+        playerName:  ses.playerName || '',
+        gameMode:    ses.gameMode,
+        settings:    ses.settings,
+        completed:   !!completed,
+        wordsPlanned: gameState.sessionWords.length,
+        words: gameState.wordStats.map(s => ({
+            wordId:       s.wordId,
+            word:         s.word,
+            category:     s.category,
+            mode:         s.mode,
+            timeMs:       s.timeMs,
+            errors:       s.errors,
+            hintShown:    s.hintShown,
+            skipped:      s.wasSkipped,
+            wrongPicks:   s.wrongPicks,
+            letterErrors: s.letterErrors
+        }))
+    };
+    try { await saveSession(record); } catch (e) { console.error('saveSession failed', e); }
+}
+
 function skipWord() {
     if (successTimer) { clearTimeout(successTimer); successTimer = null; }
+    _accumulateWordTime();
     const popup = document.getElementById('popup-word-success');
     popup.classList.add('hidden');
     popup.querySelectorAll('.star').forEach(s => s.classList.remove('star-pop'));
@@ -185,6 +256,8 @@ function showCurrentWord() {
     gameState.disabledLetters = [];
     gameState.currentLetterErrors = 0;
     gameState.currentWordErrors = 0;
+    gameState.wordShownAt = Date.now();
+    _track(word.id).attempts++;
 
     // Progress
     const idx = gameState.currentWordIndex;
@@ -276,10 +349,14 @@ function handleImageChoice(chosen, card) {
         card.appendChild(overlay);
         gameState.currentWordErrors++;
         gameState.currentLetterErrors++;
+        const tr = _track(word.id);
+        tr.errors++;
+        tr.wrongPicks.push({ target: word.word, chosen: chosen.word });
         setTimeout(() => card.classList.remove('btn-shake'), 400);
         if (gameState.hintEnabled && gameState.currentLetterErrors >= gameState.hintAfterErrors) {
             const correct = document.querySelector(`.image-choice[data-word-id="${word.id}"]`);
             if (correct) correct.classList.add('choice-hint');
+            tr.hintShown = true;
         }
     }
 }
@@ -384,10 +461,15 @@ function handleLetterClick(letter, btn) {
         gameState.disabledLetters.push(letter);
         gameState.currentLetterErrors++;
         gameState.currentWordErrors++;
+        const tr = _track(word.id);
+        tr.errors++;
+        tr.wrongPicks.push({ target, chosen: letter, pos: gameState.currentLetterIndex });
+        tr.letterErrors[target] = (tr.letterErrors[target] || 0) + 1;
         setTimeout(() => btn.classList.remove('btn-shake'), 400);
         // Show hint if threshold reached
         if (gameState.hintEnabled && gameState.currentLetterErrors >= gameState.hintAfterErrors) {
             showLetterHint(target);
+            tr.hintShown = true;
         }
     }
 }
@@ -404,15 +486,22 @@ async function showWordSuccess() {
     playCelebration();
     timerDuration = (await getSetting('timerDuration')) ?? 5;
 
-    // Record stats for this word
+    // Record stats for this word (errors/time accumulate across a skip)
     const word = gameState.sessionWords[gameState.currentWordIndex];
+    _accumulateWordTime();
+    const tr = _track(word.id);
     gameState.wordStats.push({
+        wordId:       word.id,
         word:         word.word,
         category:     word.category     || '',
         categoryIcon: word.categoryIcon || '📦',
-        errors:       gameState.currentWordErrors,
+        errors:       tr.errors,
         wasSkipped:   gameState.skippedWordIds.has(word.id),
-        mode:         gameState.currentWordMode
+        mode:         gameState.currentWordMode,
+        timeMs:       tr.timeMs,
+        hintShown:    tr.hintShown,
+        wrongPicks:   tr.wrongPicks,
+        letterErrors: tr.letterErrors
     });
 
     // Personalised greeting
@@ -465,6 +554,7 @@ function nextWord() {
 
 function showEndScreen() {
     playCelebration();
+    saveGameSession(true);
     document.getElementById('end-score').textContent = gameState.sessionWords.length;
     const name = gameState.playerName;
     document.getElementById('end-title-text').textContent = name ? `כל הכבוד, ${name}!` : 'כל הכבוד!';
@@ -697,6 +787,7 @@ function showParentReport() {
                 <th>מילה</th>
                 <th>קטגוריה</th>
                 <th>שגיאות</th>
+                <th>זמן</th>
                 <th></th>
             </tr></thead>
             <tbody>`;
@@ -712,6 +803,7 @@ function showParentReport() {
                 <td><strong>${s.categoryIcon} ${s.word}</strong>${modeBadge}${skippedBadge}</td>
                 <td>${s.category}</td>
                 <td style="color:${errColor}; font-weight:bold;">${s.errors}</td>
+                <td style="color:#666;">${formatSeconds(s.timeMs)}</td>
                 <td>${s.errors === 0 ? '⭐' : ''}</td>
             </tr>`;
         });
@@ -722,6 +814,13 @@ function showParentReport() {
 
     document.getElementById('report-content').innerHTML = html;
     document.getElementById('report-modal').classList.remove('hidden');
+}
+
+function formatSeconds(ms) {
+    if (ms == null) return '';
+    const sec = Math.round(ms / 1000);
+    if (sec < 60) return sec + ' שנ\'';
+    return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
 }
 
 function closeParentReport() {

@@ -6,6 +6,7 @@ const GOOGLE_CLIENT_ID = '856748850670-te01oei8219md66s881itlakcfudg9j1.apps.goo
 const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata';
 const PROFILE_SCOPE    = 'https://www.googleapis.com/auth/userinfo.profile';
 const METADATA_FILE    = 'hebrew-game-metadata.json';
+const SESSIONS_FILE    = 'hebrew-game-sessions.json';
 const IMG_PREFIX       = 'img_';
 const LS_USER          = 'gSyncUser';
 const LS_LAST_SYNC     = 'gSyncLastTs';
@@ -20,6 +21,7 @@ let _debounceTimer = null;
 let _isSyncing     = false;
 let _dirtyImages   = new Set(); // word IDs whose images changed locally
 let _firstSync     = true;      // first sync after login → upload all images
+let _sessionsDirty = true;      // local game history changed since last sync
 
 // ── Initialization ────────────────────────────────
 function initGoogleSync() {
@@ -168,6 +170,12 @@ function notifyImageChanged(wordId) {
     _scheduleSync();
 }
 
+function notifySessionsChanged() {
+    _sessionsDirty = true;
+    if (!_user) return;
+    _scheduleSync();
+}
+
 function _scheduleSync() {
     clearTimeout(_debounceTimer);
     _debounceTimer = setTimeout(_runSync, SYNC_DEBOUNCE_MS);
@@ -199,6 +207,8 @@ async function _runSync() {
             // Local is newer (or same) → push
             await _syncUp(files);
         }
+        // Game history is merged both ways (union by session id) — never overwritten
+        await _syncSessions(files);
         localStorage.setItem(LS_LAST_SYNC, String(Date.now()));
         _dirtyImages.clear();
         _firstSync = false;
@@ -218,7 +228,7 @@ async function _syncUp(files) {
     const data    = await exportAllData();
     const isFirst = !files[METADATA_FILE]; // No metadata yet → new Drive, upload everything
 
-    // Metadata (no image data)
+    // Metadata (no image data, no game history — that has its own file)
     const metadata = {
         version:      2,
         lastModified: Date.now(),
@@ -248,6 +258,27 @@ async function _syncUp(files) {
             const id = name.slice(IMG_PREFIX.length);
             if (!wordIds.has(id)) await _del(name);
         }
+    }
+}
+
+// ── Game history (two-way merge) ──────────────────
+async function _syncSessions(files) {
+    let remote = [];
+    if (files[SESSIONS_FILE]) {
+        try { remote = JSON.parse(await _readText(files[SESSIONS_FILE].id)).sessions || []; }
+        catch (e) { console.warn('Could not read remote sessions:', e); }
+    }
+    const added = await mergeSessions(remote);          // pull what we don't have
+    const local = await getAllSessions();
+    const remoteIds = new Set(remote.map(s => s.id));
+    const hasNewLocal = local.some(s => !remoteIds.has(s.id));
+    if (hasNewLocal || (_sessionsDirty && !files[SESSIONS_FILE])) {
+        await _write(SESSIONS_FILE, JSON.stringify({ version: 1, sessions: local }));
+    }
+    _sessionsDirty = false;
+    if (added > 0) {
+        if (typeof refreshStatsIfOpen === 'function') refreshStatsIfOpen();
+        showAdminToast(`☁️ ${added} משחקים נוספו להיסטוריה מ-Google Drive`);
     }
 }
 
